@@ -494,6 +494,15 @@
         userType: makeAdmin ? "Administrador" : "Funcionario",
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
+
+      if (makeAdmin) {
+        await db.collection("leaders_public").doc(credential.user.uid).set({
+          email: email || authEmail,
+          name,
+          sector: "ADMINISTRADOR"
+        }, { merge: true });
+      }
+
       await secondaryAuth.signOut();
       closeEmployeeModal();
     } catch (error) {

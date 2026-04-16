@@ -57,7 +57,7 @@ try {
     const data = payload?.data || {};
     const notification = payload?.notification || {};
     const title = notification.title || data.title || "Novo RID recebido";
-    const body = notification.body || data.body || "Uma nova RID foi registrada no sistema.";
+    const body = notification.body || data.body || "Um novo RID foi registrado no sistema.";
     const url = data.click_action || data.url || "./dashboard.html";
     const icon = data.icon || notification.icon || "./icon-192.png";
 

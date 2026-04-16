@@ -134,7 +134,10 @@
   function redirectToLogin(message) {
     if (message) sessionStorage.setItem("ridLoginFeedback", message);
     const currentPage = window.location.pathname.split(/[\\/]/).pop() || "dashboard.html";
-    const next = currentPage === "login.html" ? "dashboard.html" : currentPage;
+    const currentSearch = window.location.search || "";
+    const currentHash = window.location.hash || "";
+    const currentTarget = `${currentPage}${currentSearch}${currentHash}`;
+    const next = currentPage === "login.html" ? "dashboard.html" : currentTarget;
     window.location.replace(`login.html?next=${encodeURIComponent(next)}`);
   }
 
