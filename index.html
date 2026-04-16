@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Link descontinuado | Sistema de Gerenciamento de RIDs</title>
+  <link rel="icon" href="icon.png">
+  <style>
+    :root {
+      color-scheme: light;
+      --panel: rgba(255, 255, 255, 0.28);
+      --panel-border: rgba(255, 255, 255, 0.1);
+      --text: #0f172a;
+      --muted: #475569;
+      --button: #020617;
+      --button-hover: #111827;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 24px;
+      background: url("erro-404.png") center 62% / cover no-repeat;
+      background-color: #0f172a;
+      color: var(--text);
+    }
+
+    .modal {
+      width: min(100%, 420px);
+      padding: 28px 24px;
+      margin-bottom: 28px;
+      border-radius: 24px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      text-align: center;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 36px);
+      line-height: 1.05;
+    }
+
+    p {
+      margin: 14px 0 0;
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      margin-top: 24px;
+      padding: 14px 18px;
+      border-radius: 16px;
+      background: var(--button);
+      color: #fff;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 700;
+      transition: transform 0.18s ease, background 0.18s ease;
+    }
+
+    .cta:hover {
+      background: var(--button-hover);
+      transform: translateY(-1px);
+    }
+
+    .hint {
+      margin-top: 14px;
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        align-items: flex-end;
+        background-position: center 66%;
+      }
+
+      .modal {
+        margin-bottom: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="modal" role="dialog" aria-labelledby="titulo" aria-describedby="descricao">
+    <p class="eyebrow">Versao descontinuada</p>
+    <h1 id="titulo">Este link nao e mais compativel</h1>
+    <p id="descricao">
+      A versao acessada foi descontinuada. Para continuar usando o sistema, entre pelo novo acesso.
+    </p>
+    <a class="cta" href="https://sistemarid.github.io/Privado-v1.20/login">Ir para o novo acesso</a>
+    <div class="hint">Use o botao acima para continuar no sistema.</div>
+  </main>
+</body>
+</html>

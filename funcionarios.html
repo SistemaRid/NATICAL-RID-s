@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="pt-BR" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Funcionarios | Sistema RID's</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="icon.png">
+  <style>
+    * { font-family: 'DM Sans', sans-serif; }
+    html, body { height: 100%; margin: 0; }
+    .sidebar { width: 72px; height: 100dvh; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; }
+    .sidebar:hover { width: 260px; }
+    .sidebar:hover .nav-label { opacity: 1; transform: translateX(0); }
+    .nav-label { opacity: 0; transform: translateX(-8px); transition: opacity 0.2s ease 0.1s, transform 0.2s ease 0.1s; white-space: nowrap; }
+    .sidebar-brand { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 72px; margin-bottom: 24px; overflow: visible; }
+    .logo-mark { width: 38px; height: 38px; object-fit: contain; transition: width 0.25s ease, height 0.25s ease; }
+    .sidebar:hover .logo-mark { width: 76px; height: 76px; }
+    .nav-item { transition: background 0.15s ease, color 0.15s ease; }
+    .nav-item:hover { background: rgba(0,0,0,0.04); }
+    .nav-item.active { background: rgba(0,0,0,0.06); }
+    .auth-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.95); display: none; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
+    .auth-overlay.visible { display: flex; }
+    .auth-card { width: min(100%, 420px); border: 1px solid #e5e7eb; border-radius: 24px; padding: 28px; background: #fff; box-shadow: 0 16px 48px rgba(15,23,42,0.08); }
+    .boot-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.98); display: flex; align-items: center; justify-content: center; z-index: 55; padding: 24px; }
+    .hidden-state { display: none !important; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 28px; }
+    .filter-popover { position: relative; z-index: 50; }
+    .filter-panel { position: absolute; top: calc(100% + 10px); right: 0; width: min(100vw - 32px, 420px); padding: 18px; border: 1px solid #e5e7eb; border-radius: 20px; background: white; box-shadow: 0 18px 46px rgba(15, 23, 42, 0.12); display: none; z-index: 80; }
+    .filter-panel.visible { display: block; }
+    .employee-row { display: grid; grid-template-columns: 1.2fr 1fr 150px 150px 150px 150px 220px; gap: 16px; align-items: center; }
+    .dashboard-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 60; }
+    .dashboard-modal-overlay.visible { display: flex; }
+    .dashboard-modal-card { width: min(100%, 760px); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 24px; background: white; box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18); }
+    @media (max-width: 1280px) {
+      .employee-row { grid-template-columns: 1.2fr 1fr 150px 140px 140px 140px; }
+      .employee-row > :last-child { grid-column: 1 / -1; }
+    }
+    @media (max-width: 920px) {
+      .sidebar { width: 72px; }
+      .sidebar:hover { width: 72px; }
+      .nav-label, .logo-text { opacity: 0 !important; transform: translateX(-8px) !important; }
+      .page-header { flex-direction: column; align-items: stretch; }
+      main.flex-1 { padding: 20px !important; }
+      .employee-row { grid-template-columns: 1fr; gap: 10px; }
+    }
+    @media (max-width: 640px) {
+      body { overflow-x: hidden; }
+      .sidebar { display: none !important; }
+      main.flex-1 { padding: 16px !important; }
+      .filter-panel { left: 0; right: auto; width: min(100vw - 32px, 360px); }
+    }
+  </style>
+  <style>
+    .site-footer {
+      position: fixed;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      z-index: 40;
+      width: max-content;
+      max-width: calc(100vw - 32px);
+      margin: 0;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-align: center;
+      flex-shrink: 0;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      pointer-events: auto;
+      cursor: pointer;
+      text-decoration: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+    
+    .site-footer:hover {
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+    }
+    .site-footer.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+  </style>
+</head>
+<body class="h-full bg-white">
+  <div id="bootOverlay" class="boot-overlay">
+    <div class="text-center">
+      <div class="w-14 h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center mx-auto overflow-hidden shadow-sm">
+        <img src="icon-192.png" alt="Privado" class="w-11 h-11 object-contain">
+      </div>
+      <div class="text-sm font-semibold text-gray-900 mt-4">Carregando sessao</div>
+      <div class="text-xs text-gray-400 mt-2">Abrindo a gestao de funcionarios...</div>
+    </div>
+  </div>
+
+  <div id="authOverlay" class="auth-overlay">
+    <form id="loginForm" class="auth-card">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center overflow-hidden">
+          <img src="icon-192.png" alt="Privado" class="w-10 h-10 object-contain">
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-[0.2em] text-gray-400 font-semibold">Privado</p>
+          <h1 class="text-xl font-bold text-gray-900">Sistema RID's</h1>
+        </div>
+      </div>
+      <p class="text-sm text-gray-500 mb-6">Entre com sua conta de gestao para visualizar os funcionarios.</p>
+      <div class="space-y-4">
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-2" for="loginCpf">CPF</label>
+          <input id="loginCpf" type="text" maxlength="14" placeholder="000.000.000-00" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
+        </div>
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-2" for="loginPassword">Senha</label>
+          <input id="loginPassword" type="password" maxlength="6" placeholder="******" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
+        </div>
+        <button id="loginSubmitButton" type="submit" class="w-full py-3 rounded-xl bg-black text-white font-semibold">Entrar</button>
+        <p id="loginFeedback" class="text-sm text-red-500 hidden-state">Nao foi possivel entrar.</p>
+      </div>
+    </form>
+  </div>
+
+  <div id="pageShell" class="flex h-full w-full overflow-auto hidden-state">
+    <aside class="sidebar h-full flex-shrink-0 border-r border-gray-100 flex flex-col py-5 px-3" style="background:#fafbfc;">
+      <div class="sidebar-brand">
+        <img src="icon.png" alt="Privado" class="logo-mark">
+      </div>
+      <nav class="flex flex-col gap-1 flex-1">
+        <a href="dashboard.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="home" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Inicio</span></a>
+        <a href="rids.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="clipboard-list" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">RIDs</span></a>
+        <a href="meus-rids.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="folder-kanban" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Meus RIDs</span></a>
+        <a href="funcionarios.html" class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-900 font-medium"><i data-lucide="users" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Funcionarios</span></a>
+        <a href="relatorios.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="file-text" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Relatorios</span></a>
+        <a href="melhorias.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="wrench" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Melhorias</span></a>
+        <a href="designados.html" data-admin-only-nav="designated" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="user-check" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Designados</span></a>
+        <a href="centro-controle.html" data-developer-only-nav="control-center" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="activity" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Centro de Controle</span></a>
+        <a href="alteracoes.html" data-privileged-nav="changes" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="history" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Alteracoes</span></a>
+        <a href="solicitacoes.html" data-developer-only-nav="requests" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="shield-check" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Solicitacoes</span></a>
+      </nav>
+      <div class="flex flex-col gap-1 mt-4 border-t border-gray-200 pt-4">
+        <a href="configuracoes.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="settings" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Configuracoes</span></a>
+        <button id="logoutButton" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-500 text-left"><i data-lucide="log-out" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Sair</span></button>
+      </div>
+    </aside>
+
+    <main class="flex-1 overflow-x-hidden overflow-y-auto p-8" style="min-width:0;">
+      <header class="page-header">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900">Funcionarios</h1>
+          <p id="welcomeText" class="text-gray-400 mt-1 text-sm">Lista completa de funcionarios com gestao de cadastro.</p>
+        </div>
+        <div class="filter-popover">
+          <button id="toggleFiltersButton" class="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium">Filtros</button>
+          <div id="filtersPanel" class="filter-panel">
+            <div class="text-xs uppercase tracking-wider font-semibold text-gray-400 mb-4">Filtros da listagem</div>
+            <div class="space-y-3">
+              <select id="filterSector" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+                <option value="">Todos os setores</option>
+              </select>
+              <input id="searchInput" type="text" placeholder="Buscar por nome, email, cpf ou funcao..." class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+            </div>
+            <div class="flex items-center justify-end gap-3 mt-4">
+              <button id="clearFiltersButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium text-gray-600">Limpar filtros</button>
+              <button id="applyFiltersButton" type="button" class="px-4 py-2.5 rounded-xl bg-black text-white text-sm font-semibold">Filtrar</button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section class="border border-gray-100 rounded-2xl overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h2 class="font-semibold text-gray-900 text-sm">Lista de funcionarios</h2>
+            <p class="text-xs text-gray-400 mt-1">Edite cadastros ou abra solicitacoes de remocao por aqui.</p>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <span id="employeesCount" class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold text-gray-600">0 funcionarios</span>
+            <button id="downloadPdfButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">Baixar PDF</button>
+            <button id="addEmployeeButton" type="button" class="px-4 py-2.5 rounded-xl bg-black text-white text-sm font-semibold">Adicionar funcionario</button>
+          </div>
+        </div>
+        <div class="px-6 py-3 border-b border-gray-100 hidden md:block">
+          <div class="employee-row text-[11px] uppercase tracking-wider font-semibold text-gray-400">
+            <div>Nome</div>
+            <div>Email</div>
+            <div>CPF</div>
+            <div>Unidade</div>
+            <div>Setor</div>
+            <div>Funcao</div>
+            <div>Acoes</div>
+          </div>
+        </div>
+        <div id="employeesList" class="p-4 space-y-3"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="employeeModal" class="dashboard-modal-overlay">
+    <div class="dashboard-modal-card" style="max-width:640px;">
+      <div class="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div>
+          <div class="text-xs uppercase tracking-wider font-semibold text-gray-400">Cadastro do funcionario</div>
+          <h2 id="employeeModalTitle" class="text-xl font-bold text-gray-900 mt-2">Editar funcionario</h2>
+        </div>
+        <button id="employeeModalClose" class="w-10 h-10 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-lg leading-none">x</button>
+      </div>
+      <form id="employeeForm" class="p-6 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="employeeName" class="text-sm font-medium text-gray-700 block mb-2">Nome</label>
+            <input id="employeeName" type="text" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
+          </div>
+          <div>
+            <label for="employeeEmail" class="text-sm font-medium text-gray-700 block mb-2">Email</label>
+            <input id="employeeEmail" type="email" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
+          </div>
+          <div>
+            <label for="employeeCpf" class="text-sm font-medium text-gray-700 block mb-2">CPF</label>
+            <input id="employeeCpf" type="text" maxlength="14" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
+          </div>
+          <div>
+            <label for="employeeUnit" class="text-sm font-medium text-gray-700 block mb-2">Unidade</label>
+            <select id="employeeUnit" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 bg-white">
+              <option value="">Selecione a unidade</option>
+              <option value="CALTINS">CALTINS</option>
+              <option value="CALTINS XAMBIOA II">CALTINS XAMBIOA II</option>
+              <option value="FORMACAL">FORMACAL</option>
+              <option value="GESSOTINS">GESSOTINS</option>
+              <option value="MINERAX">MINERAX</option>
+              <option value="NATICAL">NATICAL</option>
+              <option value="SUPERCAL">SUPERCAL</option>
+            </select>
+          </div>
+          <div>
+            <label for="employeeSector" class="text-sm font-medium text-gray-700 block mb-2">Setor</label>
+            <select id="employeeSector" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 bg-white">
+              <option value="">Selecione o setor</option>
+              <option value="ADM">ADM</option>
+              <option value="M. MOVEL">M. MOVEL</option>
+              <option value="M. FIXA">M. FIXA</option>
+              <option value="M. ELETRICA">M. ELETRICA</option>
+              <option value="PRODUCAO">PRODUCAO</option>
+              <option value="MINA">MINA</option>
+            </select>
+          </div>
+          <div>
+            <label for="employeeRole" class="text-sm font-medium text-gray-700 block mb-2">Funcao</label>
+            <input id="employeeRole" type="text" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
+          </div>
+          <div id="employeeVacationField" class="hidden-state md:col-span-2 rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+            <div class="text-sm font-semibold text-gray-900">Periodo de ferias</div>
+            <p class="text-xs text-gray-500 mt-1">Ao informar esse periodo, o funcionario fica isento da meta mensal da unidade nos dias correspondentes.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label for="employeeVacationStart" class="text-sm font-medium text-gray-700 block mb-2">Inicio</label>
+                <input id="employeeVacationStart" type="date" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 bg-white">
+              </div>
+              <div>
+                <label for="employeeVacationEnd" class="text-sm font-medium text-gray-700 block mb-2">Fim</label>
+                <input id="employeeVacationEnd" type="date" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 bg-white">
+              </div>
+            </div>
+            <button type="button" id="employeeVacationClear" class="mt-4 inline-flex items-center rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
+              Revogar ferias
+            </button>
+          </div>
+          <div id="employeePasswordField">
+            <label for="employeePassword" class="text-sm font-medium text-gray-700 block mb-2">Senha inicial</label>
+            <input id="employeePassword" type="password" minlength="6" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
+          </div>
+          <div id="employeeAdminField" class="hidden-state md:col-span-2">
+            <label class="inline-flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700">
+              <input id="employeeIsAdmin" type="checkbox" class="rounded border-indigo-200">
+              Criar este usuario ja como administrador
+            </label>
+          </div>
+        </div>
+        <p id="employeeFormFeedback" class="text-sm text-red-500 hidden-state"></p>
+        <div class="flex items-center justify-end gap-3">
+          <button type="button" id="employeeFormCancel" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
+          <button type="submit" id="employeeFormSubmit" class="px-4 py-2.5 rounded-xl bg-black text-sm font-semibold text-white">Salvar alteracoes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="employeeDeleteConfirmModal" class="dashboard-modal-overlay">
+    <div class="dashboard-modal-card" style="max-width:460px;">
+      <div class="px-6 py-5 border-b border-gray-100">
+        <div class="text-xs uppercase tracking-wider font-semibold text-gray-400">Exclusao de funcionario</div>
+        <h2 class="text-xl font-bold text-gray-900 mt-2">Confirmar exclusao</h2>
+      </div>
+      <div class="p-6">
+        <p class="text-sm text-gray-600">Tem certeza que deseja excluir este funcionario? A exclusao sera logica para preservar historico.</p>
+        <p id="employeeDeleteConfirmFeedback" class="text-sm text-red-500 hidden-state mt-4"></p>
+      </div>
+      <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+        <button id="employeeDeleteConfirmCancel" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
+        <button id="employeeDeleteConfirmSubmit" class="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold">Excluir</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="employeeRemovalRequestModal" class="dashboard-modal-overlay">
+    <div class="dashboard-modal-card" style="max-width:520px;">
+      <div class="px-6 py-5 border-b border-gray-100">
+        <div class="text-xs uppercase tracking-wider font-semibold text-gray-400">Solicitacao de remocao</div>
+        <h2 class="text-xl font-bold text-gray-900 mt-2">Informar motivo</h2>
+      </div>
+      <div class="p-6">
+        <label for="employeeRemovalReasonInput" class="text-sm font-medium text-gray-700 block mb-2">Motivo da solicitacao</label>
+        <textarea id="employeeRemovalReasonInput" rows="5" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm bg-white text-gray-700 resize-none focus:outline-none focus:border-gray-400" placeholder="Explique por que esse funcionario precisa ser removido"></textarea>
+        <p id="employeeRemovalRequestFeedback" class="text-sm text-red-500 hidden-state mt-4"></p>
+      </div>
+      <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+        <button id="employeeRemovalRequestCancel" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
+        <button id="employeeRemovalRequestSubmit" class="px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold">Solicitar remocao</button>
+      </div>
+    </div>
+  </div>
+
+  <a id="siteFooter" class="site-footer" href="https://wa.me/5563992076136" target="_blank" rel="noopener noreferrer" aria-label="Falar com Juan Carlos no WhatsApp">&copy; | Todos os direitos reservados. Dev. por Juan Carlos</a>
+  <script>
+    (function () {
+      const footer = document.getElementById("siteFooter");
+      if (!footer) return;
+      footer.classList.add("visible");
+      window.setTimeout(() => footer.classList.remove("visible"), 10000);
+    })();
+  </script>
+  <script src="user-profile-resolver.js"></script>
+  <script src="funcionarios-app.js"></script>
+  <script src="rid-notifications.js"></script>
+  <script src="management-login-tracker.js"></script>
+</body>
+</html>

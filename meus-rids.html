@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="pt-BR" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meus RIDs | Sistema RID's</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="icon.png">
+  <style>
+    * { font-family: 'DM Sans', sans-serif; }
+    html, body { height: 100%; margin: 0; }
+    .sidebar { width: 72px; height: 100dvh; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; }
+    .sidebar:hover { width: 260px; }
+    .sidebar:hover .nav-label { opacity: 1; transform: translateX(0); }
+    .nav-label { opacity: 0; transform: translateX(-8px); transition: opacity 0.2s ease 0.1s, transform 0.2s ease 0.1s; white-space: nowrap; }
+    .sidebar-brand { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 72px; margin-bottom: 24px; overflow: visible; }
+    .logo-mark { width: 38px; height: 38px; object-fit: contain; transition: width 0.25s ease, height 0.25s ease; }
+    .sidebar:hover .logo-mark { width: 76px; height: 76px; }
+    .nav-item { transition: background 0.15s ease, color 0.15s ease; }
+    .nav-item:hover { background: rgba(0,0,0,0.04); }
+    .nav-item.active { background: rgba(0,0,0,0.06); }
+    .auth-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.95); display: none; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
+    .auth-overlay.visible { display: flex; }
+    .auth-card { width: min(100%, 420px); border: 1px solid #e5e7eb; border-radius: 24px; padding: 28px; background: #fff; box-shadow: 0 16px 48px rgba(15,23,42,0.08); }
+    .boot-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.98); display: flex; align-items: center; justify-content: center; z-index: 55; padding: 24px; }
+    .hidden-state { display: none !important; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 28px; }
+    .performance-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .list-panel { min-height: calc(100vh - 310px); }
+    .my-rid-row { cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease; }
+    .my-rid-row:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08); border-color: #dbe4ee; }
+    .dashboard-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 60; }
+    .dashboard-modal-overlay.visible { display: flex; }
+    .dashboard-modal-card { width: min(100%, 760px); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 24px; background: white; box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18); }
+    @media (max-width: 1100px) {
+      .performance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 920px) {
+      .sidebar { width: 72px; }
+      .sidebar:hover { width: 72px; }
+      .nav-label, .logo-text { opacity: 0 !important; transform: translateX(-8px) !important; }
+      .page-header { flex-direction: column; align-items: stretch; }
+      main.flex-1 { padding: 20px !important; }
+      .performance-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      body { overflow-x: hidden; }
+      .sidebar { display: none !important; }
+      main.flex-1 { padding: 16px !important; }
+    }
+  </style>
+  <style>
+    .site-footer {
+      position: fixed;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      z-index: 40;
+      width: max-content;
+      max-width: calc(100vw - 32px);
+      margin: 0;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-align: center;
+      flex-shrink: 0;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      pointer-events: auto;
+      cursor: pointer;
+      text-decoration: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+    
+    .site-footer:hover {
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+    }
+    .site-footer.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+  </style>
+</head>
+<body class="h-full bg-white">
+  <div id="bootOverlay" class="boot-overlay">
+    <div class="text-center">
+      <div class="w-14 h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center mx-auto overflow-hidden shadow-sm">
+        <img src="icon-192.png" alt="Privado" class="w-11 h-11 object-contain">
+      </div>
+      <div class="text-sm font-semibold text-gray-900 mt-4">Carregando sessao</div>
+      <div class="text-xs text-gray-400 mt-2">Abrindo seus RIDs...</div>
+    </div>
+  </div>
+
+  <div id="authOverlay" class="auth-overlay">
+    <form id="loginForm" class="auth-card">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center overflow-hidden">
+          <img src="icon-192.png" alt="Privado" class="w-10 h-10 object-contain">
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-[0.2em] text-gray-400 font-semibold">Privado</p>
+          <h1 class="text-xl font-bold text-gray-900">Sistema RID's</h1>
+        </div>
+      </div>
+      <p class="text-sm text-gray-500 mb-6">Entre com sua conta para visualizar os RIDs que voce emitiu.</p>
+      <div class="space-y-4">
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-2" for="loginCpf">CPF</label>
+          <input id="loginCpf" type="text" maxlength="14" placeholder="000.000.000-00" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
+        </div>
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-2" for="loginPassword">Senha</label>
+          <input id="loginPassword" type="password" maxlength="6" placeholder="******" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
+        </div>
+        <button id="loginSubmitButton" type="submit" class="w-full py-3 rounded-xl bg-black text-white font-semibold">Entrar</button>
+        <p id="loginFeedback" class="text-sm text-red-500 hidden-state">Nao foi possivel entrar.</p>
+      </div>
+    </form>
+  </div>
+
+  <div id="pageShell" class="flex h-full w-full overflow-auto hidden-state">
+    <aside class="sidebar h-full flex-shrink-0 border-r border-gray-100 flex flex-col py-5 px-3" style="background:#fafbfc;">
+      <div class="sidebar-brand">
+        <img src="icon.png" alt="Privado" class="logo-mark">
+      </div>
+      <nav class="flex flex-col gap-1 flex-1">
+        <a href="dashboard.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="home" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Inicio</span></a>
+        <a href="rids.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="clipboard-list" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">RIDs</span></a>
+        <a href="meus-rids.html" class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-900 font-medium"><i data-lucide="folder-kanban" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Meus RIDs</span></a>
+        <a href="funcionarios.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="users" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Funcionarios</span></a>
+        <a href="relatorios.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="file-text" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Relatorios</span></a>
+        <a href="melhorias.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="wrench" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Melhorias</span></a>
+        <a href="designados.html" data-admin-only-nav="designated" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="user-check" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Designados</span></a>
+        <a href="centro-controle.html" data-developer-only-nav="control-center" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="activity" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Centro de Controle</span></a>
+        <a href="alteracoes.html" data-privileged-nav="changes" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="history" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Alteracoes</span></a>
+        <a href="solicitacoes.html" data-developer-only-nav="requests" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="shield-check" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Solicitacoes</span></a>
+      </nav>
+      <div class="flex flex-col gap-1 mt-4 border-t border-gray-200 pt-4">
+        <a href="configuracoes.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="settings" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Configuracoes</span></a>
+        <button id="logoutButton" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-500 text-left"><i data-lucide="log-out" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Sair</span></button>
+      </div>
+    </aside>
+
+    <main class="flex-1 overflow-x-hidden overflow-y-auto p-8" style="min-width:0;">
+      <header class="page-header">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900">Meus RIDs</h1>
+          <p id="welcomeText" class="text-gray-400 mt-1 text-sm">Acompanhamento dos RIDs emitidos por voce.</p>
+        </div>
+        <button id="openNewRidModalButton" type="button" class="px-4 py-2.5 rounded-xl bg-black text-sm font-semibold text-white">Novo RID</button>
+      </header>
+
+      <section class="border border-slate-200 rounded-[28px] p-6 mb-8 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] shadow-[0_22px_50px_rgba(15,23,42,0.06)]">
+        <div class="flex items-start justify-between gap-4 flex-wrap mb-5">
+          <div>
+            <div class="flex items-center gap-3 mb-1">
+              <div class="w-11 h-11 rounded-2xl bg-[linear-gradient(135deg,#dbeafe_0%,#ecfeff_100%)] border border-sky-100 flex items-center justify-center text-sky-600 text-lg font-bold">RD</div>
+              <div>
+                <h2 class="text-2xl font-bold text-slate-900">Meu desempenho</h2>
+                <p class="text-sm text-slate-500 mt-1">Visao geral dos seus RIDs e resultado do mes atual.</p>
+              </div>
+            </div>
+          </div>
+          <div id="performanceBadge" class="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-500 shadow-sm">Meta pendente</div>
+        </div>
+        <div id="performanceGrid" class="performance-grid"></div>
+        <div class="mt-5 rounded-[24px] border border-slate-200 bg-white/90 px-5 py-5 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div class="text-[11px] uppercase tracking-[0.24em] font-semibold text-slate-400">Progresso da meta mensal</div>
+            <div id="performanceFoot" class="text-sm md:text-base text-slate-700 font-medium">0 emitidos no mes · Meta: 0</div>
+          </div>
+          <div class="h-3 rounded-full bg-slate-100 overflow-hidden">
+            <div id="performanceProgress" class="h-full rounded-full bg-[linear-gradient(90deg,#22c55e_0%,#0ea5e9_100%)] transition-all duration-500" style="width:0%"></div>
+          </div>
+          <div id="performanceHint" class="mt-3 text-sm text-slate-500">Acompanhe sua evolucao no mes atual.</div>
+        </div>
+      </section>
+
+      <section class="list-panel border border-gray-100 rounded-2xl overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h2 class="font-semibold text-gray-900 text-sm">RIDs emitidos por voce</h2>
+            <p class="text-xs text-gray-400 mt-1">Clique na linha para abrir os detalhes do RID.</p>
+          </div>
+          <span id="myRidsCount" class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold text-gray-600">0 registros</span>
+        </div>
+        <div class="hidden md:grid grid-cols-[140px_160px_minmax(0,1fr)_170px_150px] gap-4 px-6 py-3 border-b border-gray-100 text-[11px] uppercase tracking-wider font-semibold text-gray-400">
+          <div>RID</div>
+          <div>Data de emissao</div>
+          <div>Local</div>
+          <div>Setor</div>
+          <div>Status</div>
+        </div>
+        <div id="myRidsList" class="p-4 space-y-3"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="myRidModal" class="dashboard-modal-overlay">
+    <div class="dashboard-modal-card">
+      <div class="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div>
+          <div class="text-xs uppercase tracking-wider font-semibold text-gray-400">Detalhes do meu RID</div>
+          <h2 id="myRidModalTitle" class="text-xl font-bold text-gray-900 mt-2">RID</h2>
+        </div>
+        <button id="myRidModalClose" class="w-10 h-10 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-lg leading-none">x</button>
+      </div>
+      <div id="myRidModalBody" class="p-6"></div>
+    </div>
+  </div>
+
+  <div id="newRidModal" class="dashboard-modal-overlay">
+    <div class="dashboard-modal-card" style="max-width:980px;">
+      <div class="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div>
+          <div class="text-xs uppercase tracking-wider font-semibold text-gray-400">Emissao</div>
+          <h2 class="text-xl font-bold text-gray-900 mt-2">Novo RID</h2>
+          <p class="text-sm text-gray-400 mt-2">Preencha os dados do RID com o novo layout da gestao.</p>
+        </div>
+        <button id="newRidModalClose" class="w-10 h-10 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-lg leading-none">x</button>
+      </div>
+      <form id="newRidForm" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div class="text-[11px] uppercase tracking-wider font-semibold text-slate-400">Emitente</div>
+          <div id="newRidEmitter" class="text-sm font-semibold text-slate-900 mt-2">-</div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidContractType">Tipo de contrato</label>
+          <select id="newRidContractType" name="contractType" required class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400">
+            <option value="">Selecione...</option>
+            <option value="Funcionário">Funcionário</option>
+            <option value="Terceiro Contratado">Terceiro Contratado</option>
+            <option value="Terceiro Eventual">Terceiro Eventual</option>
+            <option value="Visitante">Visitante</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidUnit">Unidade</label>
+          <select id="newRidUnit" name="unit" required class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400">
+            <option value="">Selecione...</option>
+            <option value="CALTINS">CALTINS</option>
+            <option value="CALTINS XAMBIOA II">CALTINS XAMBIOA II</option>
+            <option value="FORMACAL">FORMACAL</option>
+            <option value="GESSOTINS">GESSOTINS</option>
+            <option value="MINERAX">MINERAX</option>
+            <option value="NATICAL">NATICAL</option>
+            <option value="SUPERCAL">SUPERCAL</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidEmissionDate">Data</label>
+          <input id="newRidEmissionDate" name="emissionDate" type="date" required class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidStatus">Status inicial</label>
+          <select id="newRidStatus" name="status" required class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400">
+            <option value="VENCIDO">Vencido</option>
+            <option value="CORRIGIDO">Corrigido</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidIncidentType">Incidente ou desvio</label>
+          <select id="newRidIncidentType" name="incidentType" required class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400">
+            <option value="">Selecione...</option>
+            <option value="Condição de Risco">Condição de Risco</option>
+            <option value="Desvio Comportamental">Desvio Comportamental</option>
+            <option value="Dano Material">Dano Material</option>
+            <option value="Quase acidente">Quase acidente</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidDetectionOrigin">Origem da detecção</label>
+          <select id="newRidDetectionOrigin" name="detectionOrigin" required class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400">
+            <option value="">Selecione...</option>
+            <option value="CSL">CSL</option>
+            <option value="Inspeção programada">Inspeção programada</option>
+            <option value="Inspeção não programada">Inspeção não programada</option>
+            <option value="Observação Comportamental">Observação Comportamental</option>
+            <option value="Constatação espontânea">Constatação espontânea</option>
+            <option value="Auditoria">Auditoria</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidRiskClassification">Classificação de risco</label>
+          <select id="newRidRiskClassification" name="riskClassification" required class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400">
+            <option value="">Selecione...</option>
+            <option value="Baixo">Baixo</option>
+            <option value="Médio">Médio</option>
+            <option value="Alto">Alto</option>
+            <option value="Crítico">Crítico</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidResponsibleLeader">Responsável designado</label>
+          <select id="newRidResponsibleLeader" name="responsibleLeader" class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400">
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidLocation">Local</label>
+          <input id="newRidLocation" name="location" type="text" required class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400" placeholder="Informe o local da ocorrência">
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidDescription">Descrição</label>
+          <textarea id="newRidDescription" name="description" rows="4" required class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400" placeholder="Descreva o RID"></textarea>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidImmediateAction">Ação imediata</label>
+          <textarea id="newRidImmediateAction" name="immediateAction" rows="3" required class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400" placeholder="Descreva a ação imediata tomada"></textarea>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-2" for="newRidImage">Imagem da ocorrencia</label>
+          <input id="newRidImage" name="imageFile" type="file" accept="image/*" class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-gray-400">
+          <p class="mt-2 text-xs text-gray-400">Opcional.</p>
+        </div>
+
+        <div class="md:col-span-2 flex items-center justify-end gap-3 pt-2">
+          <button id="newRidCancel" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
+          <button id="newRidSubmit" type="submit" class="px-4 py-2.5 rounded-xl bg-black text-sm font-semibold text-white">Emitir RID</button>
+        </div>
+        <p id="newRidFeedback" class="md:col-span-2 text-sm text-red-500 hidden-state"></p>
+      </form>
+    </div>
+  </div>
+
+  <a id="siteFooter" class="site-footer" href="https://wa.me/5563992076136" target="_blank" rel="noopener noreferrer" aria-label="Falar com Juan Carlos no WhatsApp">&copy; | Todos os direitos reservados. Dev. por Juan Carlos</a>
+  <script>
+    (function () {
+      const footer = document.getElementById("siteFooter");
+      if (!footer) return;
+      footer.classList.add("visible");
+      window.setTimeout(() => footer.classList.remove("visible"), 10000);
+    })();
+  </script>
+  <script src="user-profile-resolver.js"></script>
+  <script src="meus-rids-app.js"></script>
+  <script src="rid-notifications.js"></script>
+  <script src="management-login-tracker.js"></script>
+</body>
+</html>

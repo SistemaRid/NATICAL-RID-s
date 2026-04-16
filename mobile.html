@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#6b7a8f">
+  <title>RID Mobile Offline</title>
+  <link rel="icon" href="pwa.png">
+  <link rel="apple-touch-icon" href="pwa.png">
+  <link rel="manifest" href="mobile-manifest.json">
+  <link rel="stylesheet" href="mobile.css">
+  <style>
+    .site-footer {
+      position: fixed;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      z-index: 40;
+      width: max-content;
+      max-width: calc(100vw - 32px);
+      margin: 0;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-align: center;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      pointer-events: auto;
+      cursor: pointer;
+      text-decoration: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+    
+    .site-footer:hover {
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+    }
+    .site-footer.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="true"></div>
+  <a id="siteFooter" class="site-footer" href="https://wa.me/5563992076136" target="_blank" rel="noopener noreferrer" aria-label="Falar com Juan Carlos no WhatsApp">&copy; | Todos os direitos reservados. Dev. por Juan Carlos</a>
+  <script>
+    (function () {
+      if (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone) {
+        document.body.classList.add("pwa-mode");
+      }
+      const footer = document.getElementById("siteFooter");
+      if (!footer) return;
+      footer.classList.add("visible");
+      window.setTimeout(() => footer.classList.remove("visible"), 10000);
+    })();
+  </script>
+  <script src="mobile-app.js"></script>
+</body>
+</html>

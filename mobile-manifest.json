@@ -1,0 +1,23 @@
+{
+  "name": "Sistema RID's",
+  "short_name": "Sistema RID's",
+  "start_url": "./mobile.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#edf1f4",
+  "theme_color": "#6b7a8f",
+  "icons": [
+    {
+      "src": "pwa.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "pwa.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

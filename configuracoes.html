@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="pt-BR" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuracoes | Sistema RID's</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="icon.png">
+  <style>
+    * { font-family: 'DM Sans', sans-serif; }
+    html, body { height: 100%; margin: 0; }
+    .sidebar { width: 72px; height: 100dvh; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; }
+    .sidebar:hover { width: 260px; }
+    .sidebar:hover .nav-label { opacity: 1; transform: translateX(0); }
+    .nav-label { opacity: 0; transform: translateX(-8px); transition: opacity 0.2s ease 0.1s, transform 0.2s ease 0.1s; white-space: nowrap; }
+    .sidebar-brand { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 72px; margin-bottom: 24px; overflow: visible; }
+    .logo-mark { width: 38px; height: 38px; object-fit: contain; transition: width 0.25s ease, height 0.25s ease; }
+    .sidebar:hover .logo-mark { width: 76px; height: 76px; }
+    .nav-item { transition: background 0.15s ease, color 0.15s ease; }
+    .nav-item:hover { background: rgba(0,0,0,0.04); }
+    .nav-item.active { background: rgba(0,0,0,0.06); }
+    .auth-overlay {
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(rgba(15, 23, 42, 0.48), rgba(15, 23, 42, 0.58)),
+        url('fundo.png') center/cover no-repeat;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      padding: 24px;
+    }
+    .auth-overlay.visible { display: flex; }
+    .auth-card {
+      width: min(100%, 420px);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 24px;
+      padding: 28px;
+      background: rgba(255,255,255,0.92);
+      box-shadow: 0 24px 64px rgba(15,23,42,0.22);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .boot-overlay {
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(rgba(15, 23, 42, 0.42), rgba(15, 23, 42, 0.5)),
+        url('fundo.png') center/cover no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 55;
+      padding: 24px;
+    }
+    .hidden-state { display: none !important; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .stat-card { border-radius: 16px; padding: 12px 14px; transition: box-shadow 0.2s ease, transform 0.15s ease; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04); }
+    .stat-card:hover { box-shadow: 0 10px 28px rgba(0,0,0,0.08); transform: translateY(-2px); }
+    .settings-card { border: 1px solid #eef2f7; border-radius: 18px; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); overflow: hidden; }
+    .settings-head { padding: 14px 18px; border-bottom: 1px solid #eef2f7; }
+    .settings-body { padding: 18px; }
+    .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .info-tile { border: 1px solid #eef2f7; border-radius: 16px; padding: 12px 14px; background: #fff; }
+    .notice-card { border: 1px dashed #dbe4ee; border-radius: 18px; padding: 18px; background: #fcfdff; }
+    @media (max-width: 920px) {
+      .sidebar { width: 72px; }
+      .sidebar:hover { width: 72px; }
+      .nav-label { opacity: 0 !important; transform: translateX(-8px) !important; }
+      .page-header { flex-direction: column; align-items: stretch; }
+      main.flex-1 { padding: 20px !important; }
+      .info-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      body { overflow-x: hidden; }
+      .sidebar { display: none !important; }
+      main.flex-1 { padding: 16px !important; }
+    }
+  </style>
+  <style>
+    .site-footer {
+      position: fixed;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      z-index: 40;
+      width: max-content;
+      max-width: calc(100vw - 32px);
+      margin: 0;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-align: center;
+      flex-shrink: 0;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      pointer-events: auto;
+      cursor: pointer;
+      text-decoration: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+    
+    .site-footer:hover {
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+    }
+    .site-footer.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+  </style>
+</head>
+<body class="h-full bg-white">
+  <div id="bootOverlay" class="boot-overlay">
+    <div class="text-center">
+      <div class="w-14 h-14 rounded-2xl bg-white border border-gray-200 flex items-center justify-center mx-auto overflow-hidden shadow-sm">
+        <img src="icon-192.png" alt="Privado" class="w-11 h-11 object-contain">
+      </div>
+      <div class="text-sm font-semibold text-gray-900 mt-4">Carregando sessao</div>
+      <div class="text-xs text-gray-400 mt-2">Abrindo configuracoes...</div>
+    </div>
+  </div>
+
+  <div id="authOverlay" class="auth-overlay hidden-state">
+    <form id="loginForm" class="auth-card">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-white border border-gray-200 flex items-center justify-center overflow-hidden">
+          <img src="icon-192.png" alt="Privado" class="w-10 h-10 object-contain">
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-[0.2em] text-gray-400 font-semibold">Privado</p>
+          <h1 class="text-xl font-bold text-gray-900">Sistema de Gestao de rids</h1>
+        </div>
+      </div>
+      <p class="text-sm text-gray-500 mb-6">Entre com sua conta para acessar suas configuracoes da gestao.</p>
+      <div class="space-y-4">
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-2" for="loginCpf">CPF</label>
+          <input id="loginCpf" type="text" maxlength="14" placeholder="000.000.000-00" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
+        </div>
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-2" for="loginPassword">Senha</label>
+          <input id="loginPassword" type="password" maxlength="6" placeholder="******" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
+        </div>
+        <button id="loginSubmitButton" type="submit" class="w-full py-3 rounded-xl bg-black text-white font-semibold">Entrar</button>
+        <p id="loginFeedback" class="text-sm text-red-500 hidden-state">Nao foi possivel entrar.</p>
+      </div>
+    </form>
+  </div>
+
+  <div id="pageShell" class="flex h-full w-full overflow-auto hidden-state">
+    <aside class="sidebar h-full flex-shrink-0 border-r border-gray-100 flex flex-col py-5 px-3" style="background:#fafbfc;">
+      <div class="sidebar-brand">
+        <img src="icon.png" alt="Privado" class="logo-mark">
+      </div>
+      <nav class="flex flex-col gap-1 flex-1">
+        <a href="dashboard.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="home" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Inicio</span></a>
+        <a href="rids.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="clipboard-list" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">RIDs</span></a>
+        <a href="meus-rids.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="folder-kanban" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Meus RIDs</span></a>
+        <a href="funcionarios.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="users" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Funcionarios</span></a>
+        <a href="relatorios.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="file-text" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Relatorios</span></a>
+        <a href="melhorias.html" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="wrench" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Melhorias</span></a>
+        <a href="designados.html" data-admin-only-nav="designated" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="user-check" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Designados</span></a>
+        <a href="centro-controle.html" data-developer-only-nav="control-center" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="activity" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Centro de Controle</span></a>
+        <a href="alteracoes.html" data-privileged-nav="changes" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="history" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Alteracoes</span></a>
+        <a href="solicitacoes.html" data-developer-only-nav="requests" class="nav-item hidden-state flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500"><i data-lucide="shield-check" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Solicitacoes</span></a>
+      </nav>
+      <div class="flex flex-col gap-1 mt-4 border-t border-gray-200 pt-4">
+        <a href="configuracoes.html" class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-900 font-medium"><i data-lucide="settings" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Configuracoes</span></a>
+        <button id="logoutButton" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-500 text-left"><i data-lucide="log-out" style="width:20px;height:20px;" class="flex-shrink-0"></i><span class="nav-label text-sm">Sair</span></button>
+      </div>
+    </aside>
+
+    <main class="flex-1 overflow-x-hidden overflow-y-auto p-6" style="min-width:0;">
+      <header class="page-header">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900">Configuracoes</h1>
+          <p id="welcomeText" class="text-gray-400 mt-1 text-sm">Gerencie informacoes da sua conta e ajustes gerais da gestao.</p>
+        </div>
+      </header>
+
+      <section class="card-grid mb-5">
+        <article class="stat-card bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] border border-slate-200">
+          <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Perfil</div>
+          <div id="profileNameStat" class="text-xl font-bold text-slate-900 mt-1.5">-</div>
+          <div id="profileRoleStat" class="text-[10px] text-slate-500 mt-1.5">-</div>
+        </article>
+        <article class="stat-card bg-[linear-gradient(180deg,#fffdf5_0%,#fffbeb_100%)] border border-amber-100">
+          <div class="text-[11px] font-semibold text-amber-500 uppercase tracking-wider">Setor</div>
+          <div id="profileSectorStat" class="text-xl font-bold text-amber-700 mt-1.5">-</div>
+          <div class="text-[10px] text-amber-600 mt-1.5">Vinculacao atual no sistema.</div>
+        </article>
+        <article class="stat-card bg-[linear-gradient(180deg,#f6fffb_0%,#ecfdf5_100%)] border border-emerald-100">
+          <div class="text-[11px] font-semibold text-emerald-500 uppercase tracking-wider">Meta manual</div>
+          <div id="goalStat" class="text-xl font-bold text-emerald-700 mt-1.5">-</div>
+          <div id="goalMonthStat" class="text-[10px] text-emerald-600 mt-1.5">Mes atual</div>
+        </article>
+      </section>
+
+      <section class="grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-4">
+        <article class="settings-card">
+          <div class="settings-head">
+            <h2 class="font-semibold text-gray-900 text-sm">Minha conta</h2>
+            <p class="text-xs text-gray-400 mt-1">Informacoes basicas do usuario logado.</p>
+          </div>
+          <div class="settings-body">
+            <div class="info-grid">
+              <div class="info-tile">
+                <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Nome</div>
+                <div id="profileName" class="text-sm font-semibold text-gray-900 mt-1.5">-</div>
+              </div>
+              <div class="info-tile">
+                <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">CPF</div>
+                <div id="profileCpf" class="text-sm font-semibold text-gray-900 mt-1.5">-</div>
+              </div>
+              <div class="info-tile">
+                <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Email</div>
+                <div id="profileEmail" class="text-sm font-semibold text-gray-900 mt-1.5">-</div>
+              </div>
+              <div class="info-tile">
+                <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Funcao</div>
+                <div id="profileRole" class="text-sm font-semibold text-gray-900 mt-1.5">-</div>
+              </div>
+              <div class="info-tile">
+                <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Unidade</div>
+                <div id="profileUnit" class="text-sm font-semibold text-gray-900 mt-1.5">-</div>
+              </div>
+              <div class="info-tile">
+                <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Setor</div>
+                <div id="profileSector" class="text-sm font-semibold text-gray-900 mt-1.5">-</div>
+              </div>
+            </div>
+            <form id="passwordForm" class="mt-5 space-y-4">
+              <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Troca de senha</div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input id="currentPassword" type="password" maxlength="30" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50" placeholder="Senha atual">
+                <input id="newPassword" type="password" maxlength="30" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50" placeholder="Nova senha">
+                <input id="confirmPassword" type="password" maxlength="30" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50" placeholder="Confirmar nova senha">
+              </div>
+              <div class="flex items-center justify-end gap-3">
+                <button id="passwordSubmitButton" type="submit" class="px-4 py-2.5 rounded-xl bg-black text-white text-sm font-semibold">Trocar senha</button>
+              </div>
+              <p id="passwordFeedback" class="text-sm text-gray-500"></p>
+            </form>
+          </div>
+        </article>
+
+        <article class="settings-card">
+          <div class="settings-head">
+            <h2 class="font-semibold text-gray-900 text-sm">Meta manual do mes</h2>
+            <p class="text-xs text-gray-400 mt-1">Disponivel para desenvolvedor ajustar o painel de metas.</p>
+          </div>
+          <div class="settings-body">
+            <div id="goalNotice" class="notice-card text-sm text-gray-600">
+              Esta area mostra a meta manual salva para o mes selecionado.
+            </div>
+            <form id="goalForm" class="space-y-4 mt-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <select id="goalMonth" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+                  <option value="1">Janeiro</option>
+                  <option value="2">Fevereiro</option>
+                  <option value="3">Marco</option>
+                  <option value="4">Abril</option>
+                  <option value="5">Maio</option>
+                  <option value="6">Junho</option>
+                  <option value="7">Julho</option>
+                  <option value="8">Agosto</option>
+                  <option value="9">Setembro</option>
+                  <option value="10">Outubro</option>
+                  <option value="11">Novembro</option>
+                  <option value="12">Dezembro</option>
+                </select>
+                <input id="goalYear" type="number" min="2020" max="2099" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50" placeholder="Ano">
+                <input id="goalValue" type="number" min="0" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50" placeholder="Meta">
+              </div>
+              <div class="flex items-center justify-end gap-3">
+                <button id="loadGoalButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Carregar</button>
+                <button id="saveGoalButton" type="submit" class="px-4 py-2.5 rounded-xl bg-black text-white text-sm font-semibold">Salvar meta</button>
+              </div>
+              <p id="goalFeedback" class="text-sm text-gray-500"></p>
+            </form>
+          </div>
+        </article>
+      </section>
+
+      <section id="announcementSection" class="settings-card mt-4 hidden-state">
+        <div class="settings-head">
+          <h2 class="font-semibold text-gray-900 text-sm">Aviso global de atualização</h2>
+          <p class="text-xs text-gray-400 mt-1">Defina uma mensagem para aparecer no dashboard e no mobile por alguns dias.</p>
+        </div>
+        <div class="settings-body">
+          <div id="announcementNotice" class="notice-card text-sm text-gray-600">
+            Configure um aviso para comunicar melhorias, mudanças e atualizações do sistema.
+          </div>
+          <form id="announcementForm" class="space-y-4 mt-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementTitle">Título</label>
+                <input id="announcementTitle" type="text" maxlength="80" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50" placeholder="Ex: Atualização do app mobile">
+              </div>
+              <div>
+                <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementStartDate">Data de início</label>
+                <input id="announcementStartDate" type="date" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementMessage">Mensagem</label>
+              <textarea id="announcementMessage" rows="4" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50 resize-y" placeholder="Escreva aqui o aviso que será mostrado aos usuários."></textarea>
+            </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementImage">Foto do aviso</label>
+              <input id="announcementImage" type="file" accept="image/*" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+              <p class="text-xs text-gray-400 mt-2">Opcional. A imagem aparece junto do aviso no dashboard e no mobile.</p>
+              <div id="announcementImagePreview" class="hidden-state mt-3 rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                <img id="announcementImagePreviewImg" src="" alt="Preview da foto do aviso" class="w-full max-h-56 object-cover rounded-xl border border-gray-200">
+                <div class="mt-2 flex items-center justify-between gap-3">
+                  <span id="announcementImagePreviewName" class="text-xs text-gray-500 break-all"></span>
+                  <button id="removeAnnouncementImageButton" type="button" class="px-3 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-100">Remover foto</button>
+                </div>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementDays">Mostrar por quantos dias</label>
+                <input id="announcementDays" type="number" min="1" max="60" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50" placeholder="Ex: 5">
+              </div>
+              <div>
+                <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementDailyLimit">Vezes por dia</label>
+                <input id="announcementDailyLimit" type="number" min="1" max="20" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50" placeholder="Ex: 1">
+              </div>
+              <div>
+                <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementTarget">Mostrar onde</label>
+                <select id="announcementTarget" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+                  <option value="all">PC e mobile</option>
+                  <option value="dashboard">Somente PC</option>
+                  <option value="mobile">Somente mobile</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div class="flex items-end">
+                <label class="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-700">
+                  <input id="announcementActive" type="checkbox" class="rounded border-gray-300 text-black focus:ring-gray-400">
+                  Aviso ativo
+                </label>
+              </div>
+            </div>
+            <div class="flex items-center justify-end gap-3">
+              <button id="loadAnnouncementButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Atualizar lista</button>
+              <button id="clearAnnouncementButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Limpar</button>
+              <button id="saveAnnouncementButton" type="submit" class="px-4 py-2.5 rounded-xl bg-black text-white text-sm font-semibold">Criar aviso</button>
+            </div>
+            <p id="announcementFeedback" class="text-sm text-gray-500"></p>
+          </form>
+          <div class="mt-5">
+            <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 mb-3">Avisos cadastrados</div>
+            <div id="announcementList" class="space-y-3"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <a id="siteFooter" class="site-footer" href="https://wa.me/5563992076136" target="_blank" rel="noopener noreferrer" aria-label="Falar com Juan Carlos no WhatsApp">&copy; | Todos os direitos reservados. Dev. por Juan Carlos</a>
+  <script>
+    (function () {
+      const footer = document.getElementById("siteFooter");
+      if (!footer) return;
+      footer.classList.add("visible");
+      window.setTimeout(() => footer.classList.remove("visible"), 10000);
+    })();
+  </script>
+  <script src="user-profile-resolver.js"></script>
+  <script src="configuracoes-app.js"></script>
+  <script src="rid-notifications.js"></script>
+  <script src="management-login-tracker.js"></script>
+</body>
+</html>

@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="pt-BR" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entrar | Sistema de Gestao de RID's</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="icon.png">
+  <style>
+    * { font-family: "DM Sans", sans-serif; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      min-height: 100vh;
+      background:
+        linear-gradient(rgba(15, 23, 42, 0.42), rgba(15, 23, 42, 0.56)),
+        url("fundo.png") center/cover no-repeat;
+      color: #0f172a;
+    }
+    .login-shell {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .login-card {
+      width: min(100%, 440px);
+      border-radius: 28px;
+      padding: 28px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .brand-badge {
+      width: 58px;
+      height: 58px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.95);
+      border: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .brand-badge img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+    }
+    .brand-eyebrow {
+      margin: 0 0 2px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    .brand-title {
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.05;
+      font-weight: 700;
+      color: #111827;
+    }
+    .brand-copy {
+      margin: 18px 0 0;
+      font-size: 15px;
+      line-height: 1.55;
+      color: #64748b;
+    }
+    .field-group { margin-top: 20px; }
+    .field-group label {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .field-input {
+      width: 100%;
+      border-radius: 16px;
+      border: 1px solid #dbe2ea;
+      background: rgba(255,255,255,0.96);
+      padding: 15px 16px;
+      font-size: 15px;
+      color: #0f172a;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .field-input:focus {
+      border-color: #94a3b8;
+      box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.16);
+    }
+    .submit-button {
+      width: 100%;
+      margin-top: 18px;
+      border: 0;
+      border-radius: 16px;
+      padding: 16px;
+      background: #020617;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.18s ease, opacity 0.18s ease;
+    }
+    .submit-button:hover:not(:disabled) { transform: translateY(-1px); }
+    .submit-button:disabled { opacity: 0.72; cursor: wait; }
+    .feedback {
+      margin-top: 14px;
+      font-size: 14px;
+      color: #dc2626;
+      display: none;
+    }
+    .feedback.visible { display: block; }
+    .boot-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(15, 23, 42, 0.2);
+      z-index: 20;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    .boot-card {
+      width: min(100%, 320px);
+      border-radius: 24px;
+      padding: 24px 20px;
+      background: rgba(255,255,255,0.9);
+      border: 1px solid rgba(255,255,255,0.42);
+      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.18);
+      text-align: center;
+    }
+    .boot-spinner {
+      width: 42px;
+      height: 42px;
+      margin: 0 auto 14px;
+      border-radius: 999px;
+      border: 4px solid rgba(148, 163, 184, 0.25);
+      border-top-color: #0f172a;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @media (max-width: 640px) {
+      .login-shell { padding: 16px; }
+      .login-card { padding: 24px 20px; }
+      .brand-title { font-size: 28px; }
+    }
+    .site-footer {
+      position: fixed;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      z-index: 40;
+      width: max-content;
+      max-width: calc(100vw - 24px);
+      margin: 0;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.42);
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: #334155;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-align: center;
+      pointer-events: auto;
+      cursor: pointer;
+      text-decoration: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+    
+    .site-footer:hover {
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+    }
+    .site-footer.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+  </style>
+</head>
+<body>
+  <div id="bootOverlay" class="boot-overlay">
+    <div class="boot-card">
+      <div class="boot-spinner"></div>
+      <div class="text-sm font-semibold text-slate-900">Verificando sessao</div>
+      <div class="text-xs text-slate-500 mt-2">Abrindo o acesso da gestao...</div>
+    </div>
+  </div>
+
+  <main class="login-shell">
+    <form id="loginForm" class="login-card">
+      <div class="brand-row">
+        <div class="brand-badge">
+          <img src="icon-192.png" alt="Privado">
+        </div>
+        <div>
+          <p class="brand-eyebrow">Privado</p>
+          <h1 class="brand-title">Sistema de Gestao de rids</h1>
+        </div>
+      </div>
+
+      <p class="brand-copy">Entre com sua conta para acessar os paineis da gestao.</p>
+
+      <div class="field-group">
+        <label for="loginCpf">CPF</label>
+        <input id="loginCpf" class="field-input" type="text" maxlength="14" placeholder="000.000.000-00" autocomplete="username">
+      </div>
+
+      <div class="field-group">
+        <label for="loginPassword">Senha</label>
+        <input id="loginPassword" class="field-input" type="password" maxlength="32" placeholder="******" autocomplete="current-password">
+      </div>
+
+      <button id="loginSubmitButton" class="submit-button" type="submit">Entrar</button>
+      <p id="loginFeedback" class="feedback">Nao foi possivel entrar.</p>
+    </form>
+  </main>
+
+  <a id="siteFooter" class="site-footer" href="https://wa.me/5563992076136" target="_blank" rel="noopener noreferrer" aria-label="Falar com Juan Carlos no WhatsApp">&copy; | Todos os direitos reservados. Dev. por Juan Carlos</a>
+  <script>
+    (function () {
+      const footer = document.getElementById("siteFooter");
+      if (!footer) return;
+      footer.classList.add("visible");
+      window.setTimeout(() => footer.classList.remove("visible"), 10000);
+    })();
+  </script>
+  <script src="user-profile-resolver.js"></script>
+  <script src="login-app.js"></script>
+  <script src="management-login-tracker.js"></script>
+</body>
+</html>
