@@ -1846,7 +1846,7 @@
             <div class="brand-mark">
               <img class="brand-mark-image" src="icon-192.png" alt="RID">
             </div>
-            <h1 class="hero-title">NATICAL RID's</h1>
+            <h1 class="hero-title">Sistema RID's Natical</h1>
             <p class="hero-copy">
               Fa&ccedil;a o primeiro acesso com internet para baixar seus RIDs. Depois disso, o mesmo CPF e senha podem liberar o modo offline neste aparelho.
             </p>
