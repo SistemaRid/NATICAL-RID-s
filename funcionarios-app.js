@@ -209,6 +209,31 @@
     return String(value || "").replace(/\D/g, "");
   }
 
+  function describeEmployeeCreateError(error, cpfClean) {
+    const code = String(error?.code || "").trim().toLowerCase();
+    const message = String(error?.message || "").trim();
+
+    if (code === "auth/email-already-in-use") {
+      return `Ja existe um usuario cadastrado com este CPF (${maskCpf(cpfClean)}).`;
+    }
+    if (code === "auth/invalid-email") {
+      return "O email de autenticacao gerado para este CPF ficou invalido.";
+    }
+    if (code === "auth/weak-password") {
+      return "A senha inicial e muito fraca. Use pelo menos 6 caracteres.";
+    }
+    if (code === "auth/network-request-failed") {
+      return "Falha de rede ao criar o funcionario. Verifique sua conexao e tente novamente.";
+    }
+    if (code === "auth/operation-not-allowed") {
+      return "O metodo de login por email/senha nao esta habilitado neste Firebase.";
+    }
+    if (message) {
+      return `Nao foi possivel criar o funcionario. ${message}`;
+    }
+    return "Nao foi possivel criar o funcionario.";
+  }
+
   function getFilteredEmployees() {
     const search = String(state.filters.search || "").trim().toLowerCase();
     return state.allUsers
@@ -506,7 +531,7 @@
       await secondaryAuth.signOut();
       closeEmployeeModal();
     } catch (error) {
-      dom.employeeFormFeedback.textContent = "Nao foi possivel criar o funcionario.";
+      dom.employeeFormFeedback.textContent = describeEmployeeCreateError(error, cpfClean);
       dom.employeeFormFeedback.classList.remove("hidden-state");
     } finally {
       dom.employeeFormSubmit.disabled = false;
