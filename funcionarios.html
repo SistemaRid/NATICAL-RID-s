@@ -32,6 +32,7 @@
     .boot-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.98); display: flex; align-items: center; justify-content: center; z-index: 55; padding: 24px; }
     .hidden-state { display: none !important; }
     .page-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 28px; }
+    .page-header-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 12px; }
     .filter-popover { position: relative; z-index: 50; }
     .filter-panel { position: absolute; top: calc(100% + 10px); right: 0; width: min(100vw - 32px, 420px); padding: 18px; border: 1px solid #e5e7eb; border-radius: 20px; background: white; box-shadow: 0 18px 46px rgba(15, 23, 42, 0.12); display: none; z-index: 80; }
     .filter-panel.visible { display: block; }
@@ -48,6 +49,7 @@
       .sidebar:hover { width: 72px; }
       .nav-label, .logo-text { opacity: 0 !important; transform: translateX(-8px) !important; }
       .page-header { flex-direction: column; align-items: stretch; }
+      .page-header-actions { width: 100%; justify-content: space-between; }
       main.flex-1 { padding: 20px !important; }
       .employee-row { grid-template-columns: 1fr; gap: 10px; }
     }
@@ -166,19 +168,21 @@
           <h1 class="text-2xl font-bold text-gray-900">Funcionarios</h1>
           <p id="welcomeText" class="text-gray-400 mt-1 text-sm">Lista completa de funcionarios com gestao de cadastro.</p>
         </div>
-        <div class="filter-popover">
-          <button id="toggleFiltersButton" class="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium">Filtros</button>
-          <div id="filtersPanel" class="filter-panel">
-            <div class="text-xs uppercase tracking-wider font-semibold text-gray-400 mb-4">Filtros da listagem</div>
-            <div class="space-y-3">
-              <select id="filterSector" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
-                <option value="">Todos os setores</option>
-              </select>
-              <input id="searchInput" type="text" placeholder="Buscar por nome, email, cpf ou funcao..." class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
-            </div>
-            <div class="flex items-center justify-end gap-3 mt-4">
-              <button id="clearFiltersButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium text-gray-600">Limpar filtros</button>
-              <button id="applyFiltersButton" type="button" class="px-4 py-2.5 rounded-xl bg-black text-white text-sm font-semibold">Filtrar</button>
+        <div class="page-header-actions">
+          <div class="filter-popover">
+            <button id="toggleFiltersButton" class="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium">Filtros</button>
+            <div id="filtersPanel" class="filter-panel">
+              <div class="text-xs uppercase tracking-wider font-semibold text-gray-400 mb-4">Filtros da listagem</div>
+              <div class="space-y-3">
+                <select id="filterSector" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+                  <option value="">Todos os setores</option>
+                </select>
+                <input id="searchInput" type="text" placeholder="Buscar por nome, email, cpf ou funcao..." class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+              </div>
+              <div class="flex items-center justify-end gap-3 mt-4">
+                <button id="clearFiltersButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium text-gray-600">Limpar filtros</button>
+                <button id="applyFiltersButton" type="button" class="px-4 py-2.5 rounded-xl bg-black text-white text-sm font-semibold">Filtrar</button>
+              </div>
             </div>
           </div>
         </div>

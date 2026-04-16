@@ -407,11 +407,19 @@
     }
 
     const toggleButton = document.getElementById("toggleFiltersButton");
-    const togglePopover = toggleButton?.parentElement?.classList?.contains("filter-popover")
-      ? toggleButton.parentElement
-      : null;
+    const togglePopover = toggleButton?.closest(".filter-popover") || null;
     if (togglePopover && togglePopover.parentElement) {
-      togglePopover.insertAdjacentElement("afterend", dom.root);
+      let actions = togglePopover.parentElement;
+      const isKnownActionsContainer = actions.classList.contains("rid-global-actions") || actions.classList.contains("page-header-actions");
+      if (!isKnownActionsContainer) {
+        actions = document.createElement("div");
+        actions.className = "rid-global-actions";
+        togglePopover.insertAdjacentElement("beforebegin", actions);
+        actions.appendChild(togglePopover);
+      } else if (!actions.classList.contains("rid-global-actions")) {
+        actions.classList.add("rid-global-actions");
+      }
+      actions.appendChild(dom.root);
       return;
     }
 
