@@ -1,8 +1,8 @@
 {
-  "name": "Sistema de Gerenciamento de RIDs",
-  "short_name": "Sistema RIDs",
-  "start_url": "/Privado-v1.20/",
-  "scope": "/Privado-v1.20/",
+  "name": "NATICAL RID's",
+  "short_name": "NATICAL RID's",
+  "start_url": "/NATICAL-RID-s/",
+  "scope": "/NATICAL-RID-s/",
   "display": "standalone",
   "background_color": "#dfdfdf",
   "theme_color": "#808080",

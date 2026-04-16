@@ -57,12 +57,12 @@ function buildRidStatusNotification(after, ridId) {
 
 function buildAnnouncementNotification(data) {
   const target = String(data.target || "all").trim().toLowerCase();
-  let body = "Sistema atualizado, confira...";
+  let body = "NATICAL RID's atualizado, confira...";
 
   if (target === "dashboard") {
-    body = "Sistema de gestao dos rids atualizado, confira...";
+    body = "NATICAL RID's da gestao atualizado, confira...";
   } else if (target === "mobile") {
-    body = "Sistema de emissao dos RIDs atualizado, confira...";
+    body = "NATICAL RID's mobile atualizado, confira...";
   }
 
   return {
