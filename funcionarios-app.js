@@ -209,6 +209,20 @@
     return String(value || "").replace(/\D/g, "");
   }
 
+  function normalizeUppercaseText(value) {
+    return String(value || "").toLocaleUpperCase("pt-BR");
+  }
+
+  function keepCaretAtEnd(input, nextValue) {
+    const normalizedValue = normalizeUppercaseText(nextValue);
+    if (input.value === normalizedValue) return;
+    input.value = normalizedValue;
+    if (document.activeElement === input && typeof input.setSelectionRange === "function") {
+      const caretPosition = input.value.length;
+      input.setSelectionRange(caretPosition, caretPosition);
+    }
+  }
+
   function describeEmployeeCreateError(error, cpfClean) {
     const code = String(error?.code || "").trim().toLowerCase();
     const message = String(error?.message || "").trim();
@@ -422,12 +436,12 @@
     state.selectedEmployeeId = employeeId;
     dom.employeeModalTitle.textContent = `Editar ${employee.name || "funcionario"}`;
     dom.employeeVacationField.classList.remove("hidden-state");
-    dom.employeeName.value = employee.name || "";
-    dom.employeeEmail.value = employee.email || "";
+    dom.employeeName.value = normalizeUppercaseText(employee.name || "");
+    dom.employeeEmail.value = normalizeUppercaseText(employee.email || "");
     dom.employeeCpf.value = employee.cpf || "";
-    dom.employeeUnit.value = employee.unit || "";
-    dom.employeeSector.value = employee.sector || "";
-    dom.employeeRole.value = employee.function || employee.role || employee.userType || "";
+    dom.employeeUnit.value = normalizeUppercaseText(employee.unit || "");
+    dom.employeeSector.value = normalizeUppercaseText(employee.sector || "");
+    dom.employeeRole.value = normalizeUppercaseText(employee.function || employee.role || employee.userType || "");
     dom.employeeVacationStart.value = toDateInputValue(employee.vacationPeriod?.start);
     dom.employeeVacationEnd.value = toDateInputValue(employee.vacationPeriod?.end);
     dom.employeePassword.value = "";
@@ -472,13 +486,13 @@
   }
 
   async function createEmployee() {
-    const name = String(dom.employeeName.value || "").trim();
-    const email = String(dom.employeeEmail.value || "").trim().toLowerCase();
+    const name = normalizeUppercaseText(dom.employeeName.value).trim();
+    const email = normalizeUppercaseText(dom.employeeEmail.value).trim();
     const cpfRaw = String(dom.employeeCpf.value || "").trim();
     const cpfClean = normalizeCpf(cpfRaw);
-    const unit = String(dom.employeeUnit.value || "").trim();
-    const sector = String(dom.employeeSector.value || "").trim();
-    const role = String(dom.employeeRole.value || "").trim();
+    const unit = normalizeUppercaseText(dom.employeeUnit.value).trim();
+    const sector = normalizeUppercaseText(dom.employeeSector.value).trim();
+    const role = normalizeUppercaseText(dom.employeeRole.value).trim();
     const password = String(dom.employeePassword.value || "").trim();
     const makeAdmin = !!dom.employeeIsAdmin.checked && isDeveloperProfile();
     const { vacationPeriod, error: vacationError } = readVacationPeriodFromForm();
@@ -547,12 +561,12 @@
     const employee = findEmployeeById(state.selectedEmployeeId);
     if (!employee) return;
 
-    const name = String(dom.employeeName.value || "").trim();
-    const email = String(dom.employeeEmail.value || "").trim();
+    const name = normalizeUppercaseText(dom.employeeName.value).trim();
+    const email = normalizeUppercaseText(dom.employeeEmail.value).trim();
     const cpf = String(dom.employeeCpf.value || "").trim();
-    const unit = String(dom.employeeUnit.value || "").trim();
-    const sector = String(dom.employeeSector.value || "").trim();
-    const role = String(dom.employeeRole.value || "").trim();
+    const unit = normalizeUppercaseText(dom.employeeUnit.value).trim();
+    const sector = normalizeUppercaseText(dom.employeeSector.value).trim();
+    const role = normalizeUppercaseText(dom.employeeRole.value).trim();
     const { vacationPeriod, error: vacationError } = readVacationPeriodFromForm();
 
     if (!name || !cpf) {
@@ -629,6 +643,18 @@
 
     dom.employeeCpf.addEventListener("input", () => {
       dom.employeeCpf.value = maskCpf(dom.employeeCpf.value);
+    });
+
+    dom.employeeName.addEventListener("input", () => {
+      keepCaretAtEnd(dom.employeeName, dom.employeeName.value);
+    });
+
+    dom.employeeEmail.addEventListener("input", () => {
+      keepCaretAtEnd(dom.employeeEmail, dom.employeeEmail.value);
+    });
+
+    dom.employeeRole.addEventListener("input", () => {
+      keepCaretAtEnd(dom.employeeRole, dom.employeeRole.value);
     });
 
     dom.employeeVacationClear.addEventListener("click", clearVacationFields);
