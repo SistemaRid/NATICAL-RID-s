@@ -376,6 +376,12 @@
               <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementMessage">Mensagem</label>
               <textarea id="announcementMessage" rows="4" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50 resize-y" placeholder="Escreva aqui o aviso que será mostrado aos usuários."></textarea>
             </div>
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementImage">Foto do aviso</label>
+              <input id="announcementImage" type="file" accept="image/*" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+              <p class="text-xs text-gray-400 mt-2">Opcional. A imagem aparece no aviso do dashboard e do mobile.</p>
+              <div id="announcementImagePreview" class="hidden-state mt-3"></div>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementDays">Mostrar por quantos dias</label>

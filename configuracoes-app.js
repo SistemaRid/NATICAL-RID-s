@@ -18,6 +18,8 @@
   const ANNOUNCEMENTS_COLLECTION = db.collection("globalAnnouncements");
   const RID_FORM_SETTINGS_DOC = db.collection("appSettings").doc("ridFormSchema");
   const RID_FORM_FIXED_NOTE = "O emitente logado continua sendo mostrado automaticamente no app mobile.";
+  const ANNOUNCEMENT_IMAGE_MAX_BYTES = 350 * 1024;
+  const ANNOUNCEMENT_IMAGE_MAX_DIMENSION = 1440;
   const DEFAULT_RID_FORM_SCHEMA = [
     {
       key: "contractType",
@@ -215,7 +217,8 @@
       employee: []
     },
     activeSchemaTab: "rid",
-    activeRidFormFieldIndex: null
+    activeRidFormFieldIndex: null,
+    announcementImageDataUrl: ""
   };
 
   const dom = {
@@ -260,6 +263,8 @@
     announcementTitle: document.getElementById("announcementTitle"),
     announcementStartDate: document.getElementById("announcementStartDate"),
     announcementMessage: document.getElementById("announcementMessage"),
+    announcementImage: document.getElementById("announcementImage"),
+    announcementImagePreview: document.getElementById("announcementImagePreview"),
     announcementDays: document.getElementById("announcementDays"),
     announcementDailyLimit: document.getElementById("announcementDailyLimit"),
     announcementTarget: document.getElementById("announcementTarget"),
@@ -354,6 +359,77 @@
   function formatDateTime(value) {
     const date = value?.toDate ? value.toDate() : new Date(value || "");
     return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("pt-BR");
+  }
+
+  function estimateBase64Bytes(dataUrl) {
+    const base64 = String(dataUrl || "").split(",")[1] || "";
+    return Math.ceil((base64.length * 3) / 4);
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Nao foi possivel ler a imagem."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Nao foi possivel carregar a imagem selecionada."));
+      image.src = dataUrl;
+    });
+  }
+
+  async function normalizeAnnouncementImage(file) {
+    if (!file) return "";
+    const originalDataUrl = await readFileAsDataUrl(file);
+    const image = await loadImage(originalDataUrl);
+    const maxDimension = ANNOUNCEMENT_IMAGE_MAX_DIMENSION;
+    const ratio = Math.min(1, maxDimension / Math.max(image.width || 1, image.height || 1));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round((image.width || 1) * ratio));
+    canvas.height = Math.max(1, Math.round((image.height || 1) * ratio));
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Nao foi possivel preparar a imagem do aviso.");
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    let quality = 0.86;
+    let dataUrl = canvas.toDataURL("image/jpeg", quality);
+    while (estimateBase64Bytes(dataUrl) > ANNOUNCEMENT_IMAGE_MAX_BYTES && quality > 0.42) {
+      quality -= 0.08;
+      dataUrl = canvas.toDataURL("image/jpeg", quality);
+    }
+
+    if (estimateBase64Bytes(dataUrl) > ANNOUNCEMENT_IMAGE_MAX_BYTES) {
+      throw new Error("A foto do aviso ficou grande demais. Use uma imagem menor.");
+    }
+
+    return dataUrl;
+  }
+
+  function renderAnnouncementImagePreview(dataUrl = state.announcementImageDataUrl) {
+    if (!dom.announcementImagePreview) return;
+    if (!dataUrl) {
+      dom.announcementImagePreview.innerHTML = "";
+      dom.announcementImagePreview.classList.add("hidden-state");
+      return;
+    }
+
+    dom.announcementImagePreview.classList.remove("hidden-state");
+    dom.announcementImagePreview.innerHTML = `
+      <div class="rounded-2xl border border-gray-200 bg-white p-3">
+        <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 mb-2">Prévia da foto</div>
+        <img src="${escapeAttribute(dataUrl)}" alt="Prévia da foto do aviso" class="block w-full max-h-56 object-cover rounded-xl border border-gray-100">
+      </div>
+    `;
   }
 
   function cloneRidFormSchema(schema) {
@@ -700,10 +776,13 @@
     dom.announcementTitle.value = "";
     dom.announcementStartDate.value = "";
     dom.announcementMessage.value = "";
+    dom.announcementImage.value = "";
     dom.announcementDays.value = "";
     dom.announcementDailyLimit.value = "";
     dom.announcementTarget.value = "all";
     dom.announcementActive.checked = false;
+    state.announcementImageDataUrl = "";
+    renderAnnouncementImagePreview("");
   }
 
   function renderAnnouncementList(items) {
@@ -723,6 +802,7 @@
             ${item.isActive ? "Ativo" : "Encerrado"}
           </span>
         </div>
+        ${item.imageDataUrl ? `<div class="mt-3"><img src="${escapeAttribute(item.imageDataUrl)}" alt="Imagem do aviso" class="block w-full max-h-56 object-cover rounded-xl border border-gray-100"></div>` : ""}
         <div class="text-sm text-gray-600 mt-3 whitespace-pre-wrap">${escapeHtml(item.message || "")}</div>
         <div class="text-[11px] text-gray-400 mt-3">Atualizado em ${escapeHtml(formatDateTime(item.updatedAt))}</div>
         <div class="flex items-center justify-end gap-2 mt-3">
@@ -849,9 +929,13 @@
     dom.saveAnnouncementButton.disabled = true;
     dom.announcementFeedback.textContent = "Salvando aviso...";
     try {
+      const imageDataUrl = dom.announcementImage.files?.[0]
+        ? await normalizeAnnouncementImage(dom.announcementImage.files[0])
+        : state.announcementImageDataUrl;
       await ANNOUNCEMENTS_COLLECTION.add({
         title,
         message,
+        imageDataUrl,
         startDate,
         daysVisible,
         dailyLimit,
@@ -901,6 +985,9 @@
       dom.announcementDailyLimit.value = data.dailyLimit ? String(data.dailyLimit) : "";
       dom.announcementTarget.value = String(data.target || "all");
       dom.announcementActive.checked = Boolean(data.isActive);
+      dom.announcementImage.value = "";
+      state.announcementImageDataUrl = String(data.imageDataUrl || "");
+      renderAnnouncementImagePreview();
       dom.announcementFeedback.textContent = "Campos preenchidos com base no aviso selecionado.";
     } catch (error) {
       dom.announcementFeedback.textContent = "Não foi possível carregar esse aviso para edição.";
@@ -1008,6 +1095,26 @@
     dom.goalForm.addEventListener("submit", saveGoal);
     dom.passwordForm.addEventListener("submit", changePassword);
     dom.loadAnnouncementButton.addEventListener("click", loadAnnouncement);
+    dom.announcementImage.addEventListener("change", async () => {
+      const file = dom.announcementImage.files?.[0];
+      if (!file) {
+        state.announcementImageDataUrl = "";
+        renderAnnouncementImagePreview("");
+        return;
+      }
+
+      dom.announcementFeedback.textContent = "Preparando foto do aviso...";
+      try {
+        state.announcementImageDataUrl = await normalizeAnnouncementImage(file);
+        renderAnnouncementImagePreview();
+        dom.announcementFeedback.textContent = "Foto pronta para salvar no aviso.";
+      } catch (error) {
+        state.announcementImageDataUrl = "";
+        dom.announcementImage.value = "";
+        renderAnnouncementImagePreview("");
+        dom.announcementFeedback.textContent = error?.message || "Nao foi possivel preparar a foto do aviso.";
+      }
+    });
     dom.clearAnnouncementButton.addEventListener("click", () => {
       resetAnnouncementForm();
       dom.announcementFeedback.textContent = "Campos do aviso limpos.";
