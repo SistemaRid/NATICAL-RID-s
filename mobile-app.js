@@ -15,7 +15,7 @@
   const ANNOUNCEMENTS_COLLECTION = db.collection("globalAnnouncements");
   const RID_FORM_SETTINGS_DOC = db.collection("appSettings").doc("ridFormSchema");
   const messaging = typeof firebase.messaging === "function" ? firebase.messaging() : null;
-  const WEB_PUSH_VAPID_KEY = "BC2FvVfx_PdEvXYqKdMAwZaNetYp_5Ni94FYINhTBxaXZnrhlCFfczJ-ivYtwsErGGcYAIAqUVzRz2HteJSaNuQ";
+  const WEB_PUSH_VAPID_KEY = "BI1bjhLMKixbDQsSZ98G40pFeaYqQnxDShyqYrViqepuybo0U8VtCQcGumv7R6WzaPRoLvkLY_pIK8Q4UGg8mLg";
 
   const STORAGE_KEYS = {
     auth: "ridMobileOfflineAuth",
