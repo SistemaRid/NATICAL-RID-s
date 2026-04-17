@@ -13,6 +13,7 @@ const APP_SHELL = [
   "./mobile.css",
   "./mobile-app.js",
   "./mobile-manifest.json",
+  "./icon-new.png",
   "./icon.png",
   "./icon-192.png",
   "./logo.png"
@@ -57,14 +58,14 @@ try {
     const data = payload?.data || {};
     const notification = payload?.notification || {};
     const title = notification.title || data.title || "Novo RID recebido";
-    const body = notification.body || data.body || "Um novo RID foi registrado no sistema.";
+    const body = notification.body || data.body || "Uma nova RID foi registrada no sistema.";
     const url = data.click_action || data.url || "./dashboard.html";
-    const icon = data.icon || notification.icon || "./icon-192.png";
+    const icon = data.icon || notification.icon || "./icon-new.png";
 
     self.registration.showNotification(title, {
       body,
       icon,
-      badge: "./icon-192.png",
+      badge: "./icon-new.png",
       data: { url },
       tag: data.tag || "rid-push-notification"
     });
