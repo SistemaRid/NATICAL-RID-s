@@ -235,8 +235,6 @@
     profileNameStat: document.getElementById("profileNameStat"),
     profileRoleStat: document.getElementById("profileRoleStat"),
     profileSectorStat: document.getElementById("profileSectorStat"),
-    goalStat: document.getElementById("goalStat"),
-    goalMonthStat: document.getElementById("goalMonthStat"),
     profileName: document.getElementById("profileName"),
     profileCpf: document.getElementById("profileCpf"),
     profileEmail: document.getElementById("profileEmail"),
@@ -249,14 +247,6 @@
     confirmPassword: document.getElementById("confirmPassword"),
     passwordSubmitButton: document.getElementById("passwordSubmitButton"),
     passwordFeedback: document.getElementById("passwordFeedback"),
-    goalNotice: document.getElementById("goalNotice"),
-    goalForm: document.getElementById("goalForm"),
-    goalMonth: document.getElementById("goalMonth"),
-    goalYear: document.getElementById("goalYear"),
-    goalValue: document.getElementById("goalValue"),
-    loadGoalButton: document.getElementById("loadGoalButton"),
-    saveGoalButton: document.getElementById("saveGoalButton"),
-    goalFeedback: document.getElementById("goalFeedback"),
     announcementSection: document.getElementById("announcementSection"),
     announcementNotice: document.getElementById("announcementNotice"),
     announcementForm: document.getElementById("announcementForm"),
@@ -830,58 +820,6 @@
     });
   }
 
-  async function loadGoal() {
-    const key = getMonthKey(dom.goalMonth.value, dom.goalYear.value);
-    dom.goalFeedback.textContent = "Carregando meta...";
-    try {
-      const snap = await db.collection("goals").doc(key).get();
-      if (snap.exists) {
-        const value = snap.data()?.goal ?? "";
-        dom.goalValue.value = value;
-        dom.goalStat.textContent = String(value);
-        dom.goalMonthStat.textContent = `${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}`;
-        dom.goalNotice.textContent = `Meta manual cadastrada para ${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}.`;
-        dom.goalFeedback.textContent = "Meta carregada com sucesso.";
-      } else {
-        dom.goalValue.value = "";
-        dom.goalStat.textContent = "-";
-        dom.goalMonthStat.textContent = `${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}`;
-        dom.goalNotice.textContent = `Nenhuma meta manual registrada para ${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}.`;
-        dom.goalFeedback.textContent = "Nao existe meta manual para esse mes.";
-      }
-    } catch (error) {
-      dom.goalFeedback.textContent = "Nao foi possivel carregar a meta.";
-    }
-  }
-
-  async function saveGoal(event) {
-    event.preventDefault();
-    if (!state.currentUserData?.isDeveloper) {
-      dom.goalFeedback.textContent = "Apenas desenvolvedor pode salvar meta manual.";
-      return;
-    }
-
-    const value = Number(dom.goalValue.value || 0);
-    const key = getMonthKey(dom.goalMonth.value, dom.goalYear.value);
-    dom.saveGoalButton.disabled = true;
-    dom.goalFeedback.textContent = "Salvando meta...";
-    try {
-      await db.collection("goals").doc(key).set({
-        goal: value,
-        setBy: state.currentUser.uid,
-        setAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      dom.goalStat.textContent = String(value);
-      dom.goalMonthStat.textContent = `${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}`;
-      dom.goalNotice.textContent = `Meta manual atualizada para ${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}.`;
-      dom.goalFeedback.textContent = "Meta salva com sucesso.";
-    } catch (error) {
-      dom.goalFeedback.textContent = "Nao foi possivel salvar a meta.";
-    } finally {
-      dom.saveGoalButton.disabled = false;
-    }
-  }
-
   async function loadAnnouncement() {
     dom.announcementFeedback.textContent = "Carregando aviso...";
     try {
@@ -1053,18 +991,11 @@
     dom.profileSector.textContent = formatField(user.sector, "-");
 
     if (user.isDeveloper) {
-      dom.goalForm.classList.remove("hidden-state");
       dom.announcementSection.classList.remove("hidden-state");
       dom.ridFormSection.classList.remove("hidden-state");
-      dom.goalNotice.textContent = "Defina a meta manual que sera usada nas telas administrativas.";
-      dom.goalFeedback.textContent = "";
     } else {
-      dom.goalForm.classList.add("hidden-state");
       dom.announcementSection.classList.add("hidden-state");
       dom.ridFormSection.classList.add("hidden-state");
-      dom.goalNotice.textContent = "A visualizacao de metas manuais e restrita ao perfil de desenvolvedor.";
-      dom.goalFeedback.textContent = "";
-      dom.goalStat.textContent = "-";
     }
   }
 
@@ -1091,8 +1022,6 @@
       await auth.signOut();
     });
 
-    dom.loadGoalButton.addEventListener("click", loadGoal);
-    dom.goalForm.addEventListener("submit", saveGoal);
     dom.passwordForm.addEventListener("submit", changePassword);
     dom.loadAnnouncementButton.addEventListener("click", loadAnnouncement);
     dom.announcementImage.addEventListener("change", async () => {
@@ -1280,7 +1209,6 @@
     if (window.lucide && typeof window.lucide.createIcons === "function") {
       window.lucide.createIcons();
     }
-    await loadGoal();
     if (state.currentUserData?.isDeveloper) {
       await loadAnnouncement();
       await loadRidFormSchema();
@@ -1288,9 +1216,6 @@
   }
 
   function init() {
-    const now = new Date();
-    dom.goalMonth.value = String(now.getMonth() + 1);
-    dom.goalYear.value = String(now.getFullYear());
     bindListeners();
     if (window.lucide && typeof window.lucide.createIcons === "function") {
       window.lucide.createIcons();
