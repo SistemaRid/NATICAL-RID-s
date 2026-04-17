@@ -1077,12 +1077,38 @@
     return digits.padStart(5, "0");
   }
 
+  function isIosLikeDevice() {
+    const ua = navigator.userAgent || "";
+    return /iphone|ipad|ipod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+
+  function isStandalonePwa() {
+    return !!(window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone);
+  }
+
+  function getPushUnavailableReason() {
+    if (!state.online) return "Conecte este celular a internet para ativar as notificacoes.";
+    if (!state.currentUser?.uid) return "Entre na sua conta para ativar as notificacoes do celular.";
+    if (!messaging) return "O Firebase Messaging nao carregou neste navegador.";
+    if (!("Notification" in window)) return "Este navegador nao oferece suporte a notificacoes.";
+    if (!("serviceWorker" in navigator)) return "Este navegador nao oferece suporte a service worker.";
+    if (!("PushManager" in window)) return "Este navegador nao oferece suporte completo para push.";
+    if (isIosLikeDevice() && !isStandalonePwa()) {
+      return "No iPhone/iPad, as notificacoes do PWA so funcionam depois de instalar o app na Tela de Inicio.";
+    }
+    return "";
+  }
+
   function canUsePushNotifications() {
-    return !!(state.online && state.currentUser?.uid && messaging && "Notification" in window && "serviceWorker" in navigator);
+    return !getPushUnavailableReason();
   }
 
   function describePushError(error) {
     const details = `${String(error?.code || "")} ${String(error?.message || "")}`.toLowerCase();
+    const unavailableReason = getPushUnavailableReason();
+    if (unavailableReason) {
+      return unavailableReason;
+    }
     if (Notification.permission === "denied" || details.includes("permission-blocked")) {
       return "As notificacoes do navegador estao bloqueadas neste celular.";
     }
@@ -1166,7 +1192,10 @@
   }
 
   async function requestMobilePushPermission() {
-    if (!canUsePushNotifications()) return;
+    if (!canUsePushNotifications()) {
+      showToast(getPushUnavailableReason() || "Nao foi possivel ativar as notificacoes neste celular.", "info");
+      return;
+    }
     try {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
@@ -3376,6 +3405,5 @@
 
   init();
 })();
-
 
 
