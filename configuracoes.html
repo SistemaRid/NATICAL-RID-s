@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Configuracoes | NATICAL RID's</title>
+  <title>Configuracoes | Sistema RID's</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -67,16 +67,69 @@
     .settings-card { border: 1px solid #eef2f7; border-radius: 18px; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); overflow: hidden; }
     .settings-head { padding: 14px 18px; border-bottom: 1px solid #eef2f7; }
     .settings-body { padding: 18px; }
+    .developer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+    .developer-panel { height: min(130dvh, 1529px); display: flex; flex-direction: column; }
+    .developer-panel .settings-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .panel-scroll-area { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
     .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
     .info-tile { border: 1px solid #eef2f7; border-radius: 16px; padding: 12px 14px; background: #fff; }
     .notice-card { border: 1px dashed #dbe4ee; border-radius: 18px; padding: 18px; background: #fcfdff; }
+    .schema-list { display: grid; gap: 14px; }
+    .schema-tabs { display: inline-flex; align-items: center; gap: 8px; padding: 4px; border: 1px solid #e5e7eb; border-radius: 14px; background: #f8fafc; }
+    .schema-tab { border: 0; background: transparent; color: #64748b; font-size: 12px; font-weight: 700; padding: 9px 14px; border-radius: 10px; transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease; }
+    .schema-tab.active { background: #111827; color: #fff; box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12); }
+    .schema-card { border: 1px solid #d9e2ec; border-radius: 18px; background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); padding: 14px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04); }
+    .schema-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 10px; }
+    .schema-card-head-main { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+    .schema-card-index { min-width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: #111827; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
+    .schema-card-title { font-size: 14px; font-weight: 800; color: #111827; }
+    .schema-card-meta { font-size: 11px; color: #6b7280; margin-top: 4px; line-height: 1.4; }
+    .schema-card-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .schema-card-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+    .schema-summary-tile { border: 1px solid #e6edf5; border-radius: 14px; background: #fff; padding: 10px 12px; }
+    .schema-summary-label { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #94a3b8; }
+    .schema-summary-value { font-size: 12px; color: #1f2937; margin-top: 4px; line-height: 1.4; }
+    .schema-section { border: 1px solid #e6edf5; border-radius: 18px; background: rgba(255,255,255,0.95); padding: 14px; margin-top: 14px; }
+    .schema-section-title { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; margin-bottom: 12px; }
+    .schema-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .schema-grid-compact { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .schema-field-label { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b; display: block; margin-bottom: 8px; }
+    .schema-field-note { font-size: 12px; color: #94a3b8; margin-top: 8px; }
+    .schema-options { margin-top: 14px; padding-top: 14px; border-top: 1px dashed #d7e1ea; }
+    .schema-options-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .schema-option-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; margin-top: 10px; padding: 12px; border: 1px solid #e8eef5; border-radius: 16px; background: #f8fafc; }
+    .schema-option-index { font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 8px; }
+    .schema-empty { border: 1px dashed #d1d5db; border-radius: 16px; padding: 18px; background: #f9fafb; color: #6b7280; font-size: 14px; }
+    .settings-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 80; }
+    .settings-modal-overlay.visible { display: flex; }
+    .settings-modal-card { width: min(96vw, 1500px); height: min(92dvh, 1260px); display: flex; flex-direction: column; border-radius: 24px; background: #fff; box-shadow: 0 28px 80px rgba(15, 23, 42, 0.22); border: 1px solid #e5e7eb; overflow: hidden; }
+    .settings-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid #eef2f7; }
+    .settings-modal-body { padding: 20px; flex: 1; min-height: 0; overflow-y: auto; }
+    .settings-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 16px 20px 20px; border-top: 1px solid #eef2f7; }
     @media (max-width: 920px) {
       .sidebar { width: 72px; }
       .sidebar:hover { width: 72px; }
       .nav-label { opacity: 0 !important; transform: translateX(-8px) !important; }
       .page-header { flex-direction: column; align-items: stretch; }
       main.flex-1 { padding: 20px !important; }
+      .developer-grid,
       .info-grid { grid-template-columns: 1fr; }
+      .developer-panel { height: auto; min-height: 0; }
+      .developer-panel .settings-body { display: block; }
+      .panel-scroll-area { overflow: visible; padding-right: 0; }
+      .schema-card-head,
+      .schema-card-head-main,
+      .schema-card-actions,
+      .schema-options-head { align-items: stretch; }
+      .schema-card-head,
+      .schema-card-head-main,
+      .schema-card-actions,
+      .schema-options-head { flex-direction: column; }
+      .schema-card-summary,
+      .schema-grid,
+      .schema-grid-compact,
+      .schema-option-row { grid-template-columns: 1fr; }
+      .settings-modal-card { width: min(100%, 900px); height: min(82dvh, 760px); }
     }
     @media (max-width: 640px) {
       body { overflow-x: hidden; }
@@ -144,7 +197,7 @@
         </div>
         <div>
           <p class="text-xs uppercase tracking-[0.2em] text-gray-400 font-semibold">Privado</p>
-          <h1 class="text-xl font-bold text-gray-900">NATICAL RID's</h1>
+          <h1 class="text-xl font-bold text-gray-900">Sistema de Gestao de rids</h1>
         </div>
       </div>
       <p class="text-sm text-gray-500 mb-6">Entre com sua conta para acessar suas configuracoes da gestao.</p>
@@ -298,7 +351,8 @@
         </article>
       </section>
 
-      <section id="announcementSection" class="settings-card mt-4 hidden-state">
+      <section class="developer-grid mt-4">
+      <section id="announcementSection" class="settings-card developer-panel hidden-state">
         <div class="settings-head">
           <h2 class="font-semibold text-gray-900 text-sm">Aviso global de atualização</h2>
           <p class="text-xs text-gray-400 mt-1">Defina uma mensagem para aparecer no dashboard e no mobile por alguns dias.</p>
@@ -321,18 +375,6 @@
             <div>
               <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementMessage">Mensagem</label>
               <textarea id="announcementMessage" rows="4" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50 resize-y" placeholder="Escreva aqui o aviso que será mostrado aos usuários."></textarea>
-            </div>
-            <div>
-              <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-2" for="announcementImage">Foto do aviso</label>
-              <input id="announcementImage" type="file" accept="image/*" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
-              <p class="text-xs text-gray-400 mt-2">Opcional. A imagem aparece junto do aviso no dashboard e no mobile.</p>
-              <div id="announcementImagePreview" class="hidden-state mt-3 rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                <img id="announcementImagePreviewImg" src="" alt="Preview da foto do aviso" class="w-full max-h-56 object-cover rounded-xl border border-gray-200">
-                <div class="mt-2 flex items-center justify-between gap-3">
-                  <span id="announcementImagePreviewName" class="text-xs text-gray-500 break-all"></span>
-                  <button id="removeAnnouncementImageButton" type="button" class="px-3 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-100">Remover foto</button>
-                </div>
-              </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
@@ -367,13 +409,62 @@
             </div>
             <p id="announcementFeedback" class="text-sm text-gray-500"></p>
           </form>
-          <div class="mt-5">
+          <div class="mt-5 panel-scroll-area">
             <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 mb-3">Avisos cadastrados</div>
             <div id="announcementList" class="space-y-3"></div>
           </div>
         </div>
       </section>
+
+      <section id="ridFormSection" class="settings-card developer-panel hidden-state">
+        <div class="settings-head">
+          <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 id="ridFormSectionTitle" class="font-semibold text-gray-900 text-sm">Formulario de RID mobile</h2>
+              <p id="ridFormSectionSubtitle" class="text-xs text-gray-400 mt-1">Cada card resume um campo. Clique em editar para abrir o modal com todas as opcoes.</p>
+            </div>
+            <div class="schema-tabs" role="tablist" aria-label="Editor de formularios">
+              <button id="ridSchemaTab" type="button" class="schema-tab active" data-schema-tab="rid">Formulario RID</button>
+              <button id="employeeSchemaTab" type="button" class="schema-tab" data-schema-tab="employee">Cadastro de usuario</button>
+            </div>
+          </div>
+        </div>
+        <div class="settings-body">
+          <div id="ridFormNotice" class="notice-card text-sm text-gray-600">
+            Monte aqui os campos que vao aparecer na tela de emissao de RID no mobile.
+          </div>
+          <div class="flex items-center justify-end gap-3 mt-4">
+            <button id="loadRidFormButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Carregar estrutura</button>
+            <button id="resetRidFormButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Restaurar padrao</button>
+            <button id="addRidFormFieldButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Adicionar campo</button>
+            <button id="saveRidFormButton" type="button" class="px-4 py-2.5 rounded-xl bg-black text-white text-sm font-semibold">Salvar formulario</button>
+          </div>
+          <p id="ridFormFeedback" class="text-sm text-gray-500 mt-4"></p>
+          <div class="mt-5 panel-scroll-area">
+            <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 mb-3">Campos configurados</div>
+            <div id="ridFormFields" class="schema-list"></div>
+          </div>
+        </div>
+      </section>
+      </section>
     </main>
+  </div>
+
+  <div id="ridFieldModal" class="settings-modal-overlay">
+    <div class="settings-modal-card">
+      <div class="settings-modal-head">
+        <div>
+          <div class="text-xs uppercase tracking-wider font-semibold text-gray-400">Editar campo</div>
+          <h2 id="ridFieldModalTitle" class="text-xl font-bold text-gray-900 mt-2">Campo</h2>
+        </div>
+        <button id="ridFieldModalClose" class="w-10 h-10 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-lg leading-none">x</button>
+      </div>
+      <div id="ridFieldModalBody" class="settings-modal-body"></div>
+      <div class="settings-modal-foot">
+        <button id="ridFieldModalSave" class="px-4 py-2.5 rounded-xl bg-black text-white text-sm font-semibold">Salvar</button>
+        <button id="ridFieldModalCancel" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Fechar</button>
+      </div>
+    </div>
   </div>
 
   <a id="siteFooter" class="site-footer" href="https://wa.me/5563992076136" target="_blank" rel="noopener noreferrer" aria-label="Falar com Juan Carlos no WhatsApp">&copy; | Todos os direitos reservados. Dev. por Juan Carlos</a>
@@ -385,9 +476,6 @@
       window.setTimeout(() => footer.classList.remove("visible"), 10000);
     })();
   </script>
-  <script src="user-profile-resolver.js"></script>
   <script src="configuracoes-app.js"></script>
-  <script src="rid-notifications.js"></script>
-  <script src="management-login-tracker.js"></script>
 </body>
 </html>

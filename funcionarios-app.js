@@ -17,6 +17,50 @@
   const secondaryAuth = secondaryApp.auth();
   auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
   const db = firebase.firestore();
+  const RID_FORM_SETTINGS_DOC = db.collection("appSettings").doc("ridFormSchema");
+  const DEFAULT_EMPLOYEE_FORM_SCHEMA = [
+    { key: "name", label: "Nome", type: "text", required: true, placeholder: "Nome completo", helperText: "", options: [] },
+    { key: "email", label: "Email", type: "email", required: false, placeholder: "email@empresa.com", helperText: "", options: [] },
+    { key: "cpf", label: "CPF", type: "text", required: true, placeholder: "000.000.000-00", helperText: "", options: [] },
+    {
+      key: "unit",
+      label: "Unidade",
+      type: "select",
+      required: false,
+      placeholder: "",
+      helperText: "",
+      options: [
+        { value: "CALTINS", label: "CALTINS" },
+        { value: "CALTINS XAMBIOA II", label: "CALTINS XAMBIOA II" },
+        { value: "FORMACAL", label: "FORMACAL" },
+        { value: "GESSOTINS", label: "GESSOTINS" },
+        { value: "MINERAX", label: "MINERAX" },
+        { value: "NATICAL", label: "NATICAL" },
+        { value: "SUPERCAL", label: "SUPERCAL" }
+      ]
+    },
+    {
+      key: "sector",
+      label: "Setor",
+      type: "select",
+      required: false,
+      placeholder: "",
+      helperText: "",
+      options: [
+        { value: "ADM", label: "ADM" },
+        { value: "M. MOVEL", label: "M. MOVEL" },
+        { value: "M. FIXA", label: "M. FIXA" },
+        { value: "M. ELETRICA", label: "M. ELETRICA" },
+        { value: "PRODUCAO", label: "PRODUCAO" },
+        { value: "MINA", label: "MINA" }
+      ]
+    },
+    { key: "role", label: "Funcao", type: "text", required: false, placeholder: "Funcao", helperText: "", options: [] },
+    { key: "vacationStart", label: "Inicio das ferias", type: "date", required: false, placeholder: "", helperText: "", options: [] },
+    { key: "vacationEnd", label: "Fim das ferias", type: "date", required: false, placeholder: "", helperText: "", options: [] },
+    { key: "password", label: "Senha inicial", type: "password", required: true, placeholder: "", helperText: "Usado ao criar um novo usuario.", options: [] },
+    { key: "isAdmin", label: "Criar como administrador", type: "checkbox", required: false, placeholder: "", helperText: "Disponivel para desenvolvedor.", options: [] }
+  ];
 
   const state = {
     currentUser: null,
@@ -27,7 +71,8 @@
     modalMode: "edit",
     selectedEmployeeId: null,
     actionEmployeeId: null,
-    unsubUsers: null
+    unsubUsers: null,
+    employeeFormSchema: JSON.parse(JSON.stringify(DEFAULT_EMPLOYEE_FORM_SCHEMA))
   };
 
   const dom = {
@@ -55,20 +100,7 @@
     employeeModalTitle: document.getElementById("employeeModalTitle"),
     employeeModalClose: document.getElementById("employeeModalClose"),
     employeeForm: document.getElementById("employeeForm"),
-    employeeName: document.getElementById("employeeName"),
-    employeeEmail: document.getElementById("employeeEmail"),
-    employeeCpf: document.getElementById("employeeCpf"),
-    employeeUnit: document.getElementById("employeeUnit"),
-    employeeSector: document.getElementById("employeeSector"),
-    employeeRole: document.getElementById("employeeRole"),
-    employeeVacationField: document.getElementById("employeeVacationField"),
-    employeeVacationStart: document.getElementById("employeeVacationStart"),
-    employeeVacationEnd: document.getElementById("employeeVacationEnd"),
-    employeeVacationClear: document.getElementById("employeeVacationClear"),
-    employeePasswordField: document.getElementById("employeePasswordField"),
-    employeePassword: document.getElementById("employeePassword"),
-    employeeAdminField: document.getElementById("employeeAdminField"),
-    employeeIsAdmin: document.getElementById("employeeIsAdmin"),
+    employeeFormFields: document.getElementById("employeeFormFields"),
     employeeFormFeedback: document.getElementById("employeeFormFeedback"),
     employeeFormCancel: document.getElementById("employeeFormCancel"),
     employeeFormSubmit: document.getElementById("employeeFormSubmit"),
@@ -83,26 +115,18 @@
     employeeRemovalRequestSubmit: document.getElementById("employeeRemovalRequestSubmit")
   };
 
-  function isAdminProfile(user = state.currentUserData) {
-    return !!user?.isAdmin;
-  }
-
-  function isDeveloperProfile(user = state.currentUserData) {
-    return !!(user?.isAdmin && user?.isDeveloper);
-  }
-
   function updateAdminNavigation() {
     document.querySelectorAll('[data-admin-only-nav="designated"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isAdminProfile());
+      element.classList.toggle("hidden-state", !(state.currentUserData?.isAdmin || state.currentUserData?.isDeveloper));
     });
     document.querySelectorAll('[data-developer-only-nav="control-center"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isDeveloperProfile());
+      element.classList.toggle("hidden-state", !state.currentUserData?.isDeveloper);
     });
     document.querySelectorAll('[data-privileged-nav="changes"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isDeveloperProfile());
+      element.classList.toggle("hidden-state", !state.currentUserData?.isDeveloper);
     });
     document.querySelectorAll('[data-developer-only-nav="requests"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isDeveloperProfile());
+      element.classList.toggle("hidden-state", !state.currentUserData?.isDeveloper);
     });
   }
 
@@ -158,9 +182,214 @@
     return `${year}-${month}-${day}`;
   }
 
+  function cloneSchema(schema) {
+    return JSON.parse(JSON.stringify(schema || []));
+  }
+
+  function normalizeFormOption(option, index) {
+    const value = String(option?.value ?? "").trim();
+    const label = String(option?.label ?? "").trim();
+    return {
+      value: value || `opcao_${index + 1}`,
+      label: label || value || `Opcao ${index + 1}`
+    };
+  }
+
+  function normalizeFormField(field, index) {
+    const allowedTypes = ["text", "textarea", "select", "date", "email", "password", "checkbox"];
+    const key = String(field?.key || `campo_${index + 1}`).trim() || `campo_${index + 1}`;
+    const label = String(field?.label || "").trim() || `Campo ${index + 1}`;
+    const type = allowedTypes.includes(field?.type) ? field.type : "text";
+    return {
+      key,
+      label,
+      type,
+      required: Boolean(field?.required),
+      placeholder: String(field?.placeholder || "").trim(),
+      helperText: String(field?.helperText || "").trim(),
+      options: type === "select" && Array.isArray(field?.options)
+        ? field.options.map(normalizeFormOption)
+        : []
+    };
+  }
+
+  function normalizeEmployeeFormSchema(schema) {
+    if (!Array.isArray(schema) || !schema.length) return cloneSchema(DEFAULT_EMPLOYEE_FORM_SCHEMA);
+    return schema.map(normalizeFormField);
+  }
+
+  function setEmployeeFormSchema(schema) {
+    state.employeeFormSchema = normalizeEmployeeFormSchema(schema);
+  }
+
+  async function loadEmployeeFormSchema() {
+    try {
+      const snap = await RID_FORM_SETTINGS_DOC.get();
+      const data = snap.exists ? snap.data() || {} : {};
+      setEmployeeFormSchema(data.employeeFields);
+    } catch (error) {
+      console.warn("Nao foi possivel carregar o formulario configuravel de funcionarios:", error);
+      setEmployeeFormSchema(state.employeeFormSchema);
+    }
+  }
+
+  function escapeAttribute(value) {
+    return escapeHtml(value).replace(/"/g, "&quot;");
+  }
+
+  function getEmployeeFormFieldValue(employee, key) {
+    if (!employee) return "";
+    const customValue = employee.customFields?.[key]?.value;
+    if (customValue !== undefined && customValue !== null) return String(customValue);
+
+    switch (key) {
+      case "name": return String(employee.name || "");
+      case "email": return String(employee.email || "");
+      case "cpf": return String(employee.cpf || "");
+      case "unit": return String(employee.unit || "");
+      case "sector": return String(employee.sector || "");
+      case "role":
+      case "function": return String(employee.function || employee.role || "");
+      case "vacationStart": return toDateInputValue(employee.vacationPeriod?.start);
+      case "vacationEnd": return toDateInputValue(employee.vacationPeriod?.end);
+      case "isAdmin": return employee.isAdmin ? "true" : "";
+      default: return "";
+    }
+  }
+
+  function shouldRenderEmployeeField(field, mode) {
+    if (field.key === "password") return mode === "create";
+    if (field.key === "isAdmin") return mode === "create" && !!state.currentUserData?.isDeveloper;
+    return true;
+  }
+
+  function renderEmployeeField(field, mode, employee) {
+    if (!shouldRenderEmployeeField(field, mode)) return "";
+
+    const required = field.required && !(field.key === "isAdmin") ? "required" : "";
+    const value = getEmployeeFormFieldValue(employee, field.key);
+    const helper = field.helperText ? `<p class="text-xs text-gray-500 mt-2">${escapeHtml(field.helperText)}</p>` : "";
+    const wrapperClass = (field.key === "vacationStart" || field.key === "vacationEnd")
+      ? "md:col-span-2"
+      : "";
+
+    if (field.type === "checkbox") {
+      return `
+        <div class="${wrapperClass}">
+          <div class="text-sm font-medium text-gray-700 block mb-2 invisible select-none">${escapeHtml(field.label)}</div>
+          <label class="flex min-h-[52px] w-full items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700">
+            <input
+              type="checkbox"
+              name="${escapeAttribute(field.key)}"
+              data-employee-field-key="${escapeAttribute(field.key)}"
+              class="rounded border-indigo-200"
+              ${value ? "checked" : ""}
+            >
+            ${escapeHtml(field.label)}
+          </label>
+          ${helper}
+        </div>
+      `;
+    }
+
+    if (field.key === "vacationStart" || field.key === "vacationEnd") {
+      return `
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-2" for="employee-field-${escapeAttribute(field.key)}">${escapeHtml(field.label)}</label>
+          <input
+            id="employee-field-${escapeAttribute(field.key)}"
+            type="date"
+            name="${escapeAttribute(field.key)}"
+            data-employee-field-key="${escapeAttribute(field.key)}"
+            value="${escapeAttribute(value)}"
+            class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 bg-white"
+            ${required}
+          >
+          ${helper}
+        </div>
+      `;
+    }
+
+    if (field.type === "select") {
+      const placeholderLabel = field.placeholder || `Selecione ${field.label.toLowerCase()}`;
+      const options = [`<option value="">${escapeHtml(placeholderLabel)}</option>`]
+        .concat((field.options || []).map((option) => `<option value="${escapeAttribute(option.value)}" ${String(option.value) === value ? "selected" : ""}>${escapeHtml(option.label)}</option>`))
+        .join("");
+      return `
+        <div class="${wrapperClass}">
+          <label class="text-sm font-medium text-gray-700 block mb-2" for="employee-field-${escapeAttribute(field.key)}">${escapeHtml(field.label)}</label>
+          <select
+            id="employee-field-${escapeAttribute(field.key)}"
+            name="${escapeAttribute(field.key)}"
+            data-employee-field-key="${escapeAttribute(field.key)}"
+            class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 bg-white"
+            ${required}
+          >
+            ${options}
+          </select>
+          ${helper}
+        </div>
+      `;
+    }
+
+    const inputType = field.type === "textarea" ? null : (field.type === "password" ? "password" : field.type === "email" ? "email" : field.type === "date" ? "date" : "text");
+    if (field.type === "textarea") {
+      return `
+        <div class="${wrapperClass}">
+          <label class="text-sm font-medium text-gray-700 block mb-2" for="employee-field-${escapeAttribute(field.key)}">${escapeHtml(field.label)}</label>
+          <textarea
+            id="employee-field-${escapeAttribute(field.key)}"
+            name="${escapeAttribute(field.key)}"
+            data-employee-field-key="${escapeAttribute(field.key)}"
+            class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 min-h-[120px]"
+            placeholder="${escapeAttribute(field.placeholder || "")}"
+            ${required}
+          >${escapeHtml(value)}</textarea>
+          ${helper}
+        </div>
+      `;
+    }
+
+    const extraAttrs = field.key === "cpf" ? ' maxlength="14" inputmode="numeric"' : "";
+    return `
+      <div class="${wrapperClass}">
+        <label class="text-sm font-medium text-gray-700 block mb-2" for="employee-field-${escapeAttribute(field.key)}">${escapeHtml(field.label)}</label>
+        <input
+          id="employee-field-${escapeAttribute(field.key)}"
+          type="${inputType}"
+          name="${escapeAttribute(field.key)}"
+          data-employee-field-key="${escapeAttribute(field.key)}"
+          value="${escapeAttribute(value)}"
+          placeholder="${escapeAttribute(field.placeholder || "")}"
+          class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400"
+          ${required}${extraAttrs}
+        >
+        ${helper}
+      </div>
+    `;
+  }
+
+  function renderEmployeeFormFields(mode, employee = null) {
+    const html = (state.employeeFormSchema || [])
+      .map((field) => renderEmployeeField(field, mode, employee))
+      .join("");
+    dom.employeeFormFields.innerHTML = html;
+  }
+
+  function getEmployeeFormElement(key) {
+    return dom.employeeForm?.elements?.namedItem(key) || null;
+  }
+
+  function getEmployeeFormValue(key) {
+    const element = getEmployeeFormElement(key);
+    if (!element) return "";
+    if (element.type === "checkbox") return element.checked ? "true" : "";
+    return String(element.value || "").trim();
+  }
+
   function readVacationPeriodFromForm() {
-    const startValue = String(dom.employeeVacationStart.value || "").trim();
-    const endValue = String(dom.employeeVacationEnd.value || "").trim();
+    const startValue = getEmployeeFormValue("vacationStart");
+    const endValue = getEmployeeFormValue("vacationEnd");
 
     if (!startValue && !endValue) {
       return { vacationPeriod: null, error: "" };
@@ -186,8 +415,10 @@
   }
 
   function clearVacationFields() {
-    dom.employeeVacationStart.value = "";
-    dom.employeeVacationEnd.value = "";
+    const startField = getEmployeeFormElement("vacationStart");
+    const endField = getEmployeeFormElement("vacationEnd");
+    if (startField) startField.value = "";
+    if (endField) endField.value = "";
   }
 
   function formatVacationSummary(vacationPeriod) {
@@ -207,45 +438,6 @@
 
   function normalizeCpf(value) {
     return String(value || "").replace(/\D/g, "");
-  }
-
-  function normalizeUppercaseText(value) {
-    return String(value || "").toLocaleUpperCase("pt-BR");
-  }
-
-  function keepCaretAtEnd(input, nextValue) {
-    const normalizedValue = normalizeUppercaseText(nextValue);
-    if (input.value === normalizedValue) return;
-    input.value = normalizedValue;
-    if (document.activeElement === input && typeof input.setSelectionRange === "function") {
-      const caretPosition = input.value.length;
-      input.setSelectionRange(caretPosition, caretPosition);
-    }
-  }
-
-  function describeEmployeeCreateError(error, cpfClean) {
-    const code = String(error?.code || "").trim().toLowerCase();
-    const message = String(error?.message || "").trim();
-
-    if (code === "auth/email-already-in-use") {
-      return `Ja existe um usuario cadastrado com este CPF (${maskCpf(cpfClean)}).`;
-    }
-    if (code === "auth/invalid-email") {
-      return "O email de autenticacao gerado para este CPF ficou invalido.";
-    }
-    if (code === "auth/weak-password") {
-      return "A senha inicial e muito fraca. Use pelo menos 6 caracteres.";
-    }
-    if (code === "auth/network-request-failed") {
-      return "Falha de rede ao criar o funcionario. Verifique sua conexao e tente novamente.";
-    }
-    if (code === "auth/operation-not-allowed") {
-      return "O metodo de login por email/senha nao esta habilitado neste Firebase.";
-    }
-    if (message) {
-      return `Nao foi possivel criar o funcionario. ${message}`;
-    }
-    return "Nao foi possivel criar o funcionario.";
   }
 
   function getFilteredEmployees() {
@@ -311,7 +503,7 @@
           </div>
           <div class="flex items-center gap-2 flex-wrap justify-start md:justify-end">
             <button type="button" data-edit-employee="${escapeHtml(employee.id)}" class="px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">Editar</button>
-            ${isDeveloperProfile()
+            ${state.currentUserData?.isDeveloper
               ? `<button type="button" data-delete-employee="${escapeHtml(employee.id)}" class="px-3 py-2 rounded-xl border border-red-200 bg-red-50 text-sm font-semibold text-red-700">Excluir</button>`
               : state.currentUserData?.isAdmin
                 ? `<button type="button" data-request-employee="${escapeHtml(employee.id)}" class="px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 text-sm font-semibold text-amber-700">Solicitar remocao</button>`
@@ -379,15 +571,7 @@
   }
 
   function resetEmployeeForm() {
-    dom.employeeName.value = "";
-    dom.employeeEmail.value = "";
-    dom.employeeCpf.value = "";
-    dom.employeeUnit.value = "";
-    dom.employeeSector.value = "";
-    dom.employeeRole.value = "";
-    clearVacationFields();
-    dom.employeePassword.value = "";
-    dom.employeeIsAdmin.checked = false;
+    renderEmployeeFormFields(state.modalMode);
     dom.employeeFormFeedback.classList.add("hidden-state");
     dom.employeeFormFeedback.textContent = "";
   }
@@ -418,13 +602,6 @@
     state.selectedEmployeeId = null;
     resetEmployeeForm();
     dom.employeeModalTitle.textContent = "Adicionar funcionario";
-    dom.employeeVacationField.classList.add("hidden-state");
-    dom.employeePasswordField.classList.remove("hidden-state");
-    if (isDeveloperProfile()) {
-      dom.employeeAdminField.classList.remove("hidden-state");
-    } else {
-      dom.employeeAdminField.classList.add("hidden-state");
-    }
     dom.employeeFormSubmit.textContent = "Criar funcionario";
     dom.employeeModal.classList.add("visible");
   }
@@ -435,19 +612,7 @@
     state.modalMode = "edit";
     state.selectedEmployeeId = employeeId;
     dom.employeeModalTitle.textContent = `Editar ${employee.name || "funcionario"}`;
-    dom.employeeVacationField.classList.remove("hidden-state");
-    dom.employeeName.value = normalizeUppercaseText(employee.name || "");
-    dom.employeeEmail.value = normalizeUppercaseText(employee.email || "");
-    dom.employeeCpf.value = employee.cpf || "";
-    dom.employeeUnit.value = normalizeUppercaseText(employee.unit || "");
-    dom.employeeSector.value = normalizeUppercaseText(employee.sector || "");
-    dom.employeeRole.value = normalizeUppercaseText(employee.function || employee.role || employee.userType || "");
-    dom.employeeVacationStart.value = toDateInputValue(employee.vacationPeriod?.start);
-    dom.employeeVacationEnd.value = toDateInputValue(employee.vacationPeriod?.end);
-    dom.employeePassword.value = "";
-    dom.employeeIsAdmin.checked = !!employee.isAdmin;
-    dom.employeePasswordField.classList.add("hidden-state");
-    dom.employeeAdminField.classList.add("hidden-state");
+    renderEmployeeFormFields("edit", employee);
     dom.employeeFormFeedback.classList.add("hidden-state");
     dom.employeeFormFeedback.textContent = "";
     dom.employeeFormSubmit.textContent = "Salvar alteracoes";
@@ -486,16 +651,17 @@
   }
 
   async function createEmployee() {
-    const name = normalizeUppercaseText(dom.employeeName.value).trim();
-    const email = normalizeUppercaseText(dom.employeeEmail.value).trim();
-    const cpfRaw = String(dom.employeeCpf.value || "").trim();
+    const name = getEmployeeFormValue("name");
+    const email = getEmployeeFormValue("email").toLowerCase();
+    const cpfRaw = getEmployeeFormValue("cpf");
     const cpfClean = normalizeCpf(cpfRaw);
-    const unit = normalizeUppercaseText(dom.employeeUnit.value).trim();
-    const sector = normalizeUppercaseText(dom.employeeSector.value).trim();
-    const role = normalizeUppercaseText(dom.employeeRole.value).trim();
-    const password = String(dom.employeePassword.value || "").trim();
-    const makeAdmin = !!dom.employeeIsAdmin.checked && isDeveloperProfile();
+    const unit = getEmployeeFormValue("unit");
+    const sector = getEmployeeFormValue("sector");
+    const role = getEmployeeFormValue("role") || getEmployeeFormValue("function");
+    const password = getEmployeeFormValue("password");
+    const makeAdmin = getEmployeeFormValue("isAdmin") === "true" && !!state.currentUserData?.isDeveloper;
     const { vacationPeriod, error: vacationError } = readVacationPeriodFromForm();
+    const customFields = {};
 
     if (!name || !cpfClean || !password) {
       dom.employeeFormFeedback.textContent = "Nome, CPF e senha inicial sao obrigatorios.";
@@ -518,6 +684,16 @@
     const authEmail = cpfToEmail(cpfClean);
     dom.employeeFormSubmit.disabled = true;
     try {
+      (state.employeeFormSchema || []).forEach((field) => {
+        if (!shouldRenderEmployeeField(field, "create")) return;
+        if (["name", "email", "cpf", "unit", "sector", "role", "function", "vacationStart", "vacationEnd", "password", "isAdmin"].includes(field.key)) return;
+        customFields[field.key] = {
+          label: field.label || field.key,
+          value: getEmployeeFormValue(field.key),
+          type: field.type || "text"
+        };
+      });
+
       const credential = await secondaryAuth.createUserWithEmailAndPassword(authEmail, password);
       await db.collection("users").doc(credential.user.uid).set({
         name,
@@ -528,24 +704,16 @@
         function: role || null,
         role: role || null,
         vacationPeriod,
+        customFields,
         isAdmin: makeAdmin,
         isDeveloper: false,
         userType: makeAdmin ? "Administrador" : "Funcionario",
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
-
-      if (makeAdmin) {
-        await db.collection("leaders_public").doc(credential.user.uid).set({
-          email: email || authEmail,
-          name,
-          sector: "ADMINISTRADOR"
-        }, { merge: true });
-      }
-
       await secondaryAuth.signOut();
       closeEmployeeModal();
     } catch (error) {
-      dom.employeeFormFeedback.textContent = describeEmployeeCreateError(error, cpfClean);
+      dom.employeeFormFeedback.textContent = "Nao foi possivel criar o funcionario.";
       dom.employeeFormFeedback.classList.remove("hidden-state");
     } finally {
       dom.employeeFormSubmit.disabled = false;
@@ -561,13 +729,14 @@
     const employee = findEmployeeById(state.selectedEmployeeId);
     if (!employee) return;
 
-    const name = normalizeUppercaseText(dom.employeeName.value).trim();
-    const email = normalizeUppercaseText(dom.employeeEmail.value).trim();
-    const cpf = String(dom.employeeCpf.value || "").trim();
-    const unit = normalizeUppercaseText(dom.employeeUnit.value).trim();
-    const sector = normalizeUppercaseText(dom.employeeSector.value).trim();
-    const role = normalizeUppercaseText(dom.employeeRole.value).trim();
+    const name = getEmployeeFormValue("name");
+    const email = getEmployeeFormValue("email");
+    const cpf = getEmployeeFormValue("cpf");
+    const unit = getEmployeeFormValue("unit");
+    const sector = getEmployeeFormValue("sector");
+    const role = getEmployeeFormValue("role") || getEmployeeFormValue("function");
     const { vacationPeriod, error: vacationError } = readVacationPeriodFromForm();
+    const customFields = {};
 
     if (!name || !cpf) {
       dom.employeeFormFeedback.textContent = "Nome e CPF sao obrigatorios.";
@@ -583,6 +752,16 @@
 
     dom.employeeFormSubmit.disabled = true;
     try {
+      (state.employeeFormSchema || []).forEach((field) => {
+        if (!shouldRenderEmployeeField(field, "edit")) return;
+        if (["name", "email", "cpf", "unit", "sector", "role", "function", "vacationStart", "vacationEnd", "password", "isAdmin"].includes(field.key)) return;
+        customFields[field.key] = {
+          label: field.label || field.key,
+          value: getEmployeeFormValue(field.key),
+          type: field.type || "text"
+        };
+      });
+
       await db.collection("users").doc(employee.id).update({
         name,
         email,
@@ -591,7 +770,8 @@
         sector,
         function: role,
         role,
-        vacationPeriod
+        vacationPeriod,
+        customFields
       });
       closeEmployeeModal();
     } catch (error) {
@@ -641,23 +821,11 @@
       dom.loginCpf.value = maskCpf(dom.loginCpf.value);
     });
 
-    dom.employeeCpf.addEventListener("input", () => {
-      dom.employeeCpf.value = maskCpf(dom.employeeCpf.value);
+    dom.employeeForm.addEventListener("input", (event) => {
+      if (event.target?.matches('input[name="cpf"]')) {
+        event.target.value = maskCpf(event.target.value);
+      }
     });
-
-    dom.employeeName.addEventListener("input", () => {
-      keepCaretAtEnd(dom.employeeName, dom.employeeName.value);
-    });
-
-    dom.employeeEmail.addEventListener("input", () => {
-      keepCaretAtEnd(dom.employeeEmail, dom.employeeEmail.value);
-    });
-
-    dom.employeeRole.addEventListener("input", () => {
-      keepCaretAtEnd(dom.employeeRole, dom.employeeRole.value);
-    });
-
-    dom.employeeVacationClear.addEventListener("click", clearVacationFields);
 
     dom.loginForm.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -806,12 +974,13 @@
     const userDoc = await db.collection("users").doc(user.uid).get();
     state.currentUserData = userDoc.exists ? { id: user.uid, ...userDoc.data() } : null;
 
-    if (!isAdminProfile()) {
+    if (!state.currentUserData?.isAdmin && !state.currentUserData?.isDeveloper) {
       sessionStorage.setItem("ridLoginFeedback", "Sua conta nao tem permissao para este painel.");
       await auth.signOut();
       return;
     }
 
+    await loadEmployeeFormSchema();
     listenUsers();
     showPage();
   });

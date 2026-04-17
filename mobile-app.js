@@ -13,14 +13,162 @@
   auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
   const db = firebase.firestore();
   const ANNOUNCEMENTS_COLLECTION = db.collection("globalAnnouncements");
+  const RID_FORM_SETTINGS_DOC = db.collection("appSettings").doc("ridFormSchema");
   const messaging = typeof firebase.messaging === "function" ? firebase.messaging() : null;
-  const WEB_PUSH_VAPID_KEY = "BI1bjhLMKixbDQsSZ98G40pFeaYqQnxDShyqYrViqepuybo0U8VtCQcGumv7R6WzaPRoLvkLY_pIK8Q4UGg8mLg";
+  const WEB_PUSH_VAPID_KEY = "BC2FvVfx_PdEvXYqKdMAwZaNetYp_5Ni94FYINhTBxaXZnrhlCFfczJ-ivYtwsErGGcYAIAqUVzRz2HteJSaNuQ";
 
   const STORAGE_KEYS = {
     auth: "ridMobileOfflineAuth",
     leaders: "ridMobileOfflineLeaders",
-    session: "ridMobileLastSession"
+    session: "ridMobileLastSession",
+    ridFormSchema: "ridMobileRidFormSchema"
   };
+
+  const DEFAULT_RID_FORM_SCHEMA = [
+    {
+      key: "contractType",
+      label: "Tipo de contrato",
+      type: "select",
+      required: true,
+      placeholder: "",
+      helperText: "",
+      options: [
+        { value: "Funcionario", label: "Funcionario" },
+        { value: "Terceiro Contratado", label: "Terceiro Contratado" },
+        { value: "Terceiro Eventual", label: "Terceiro Eventual" },
+        { value: "Visitante", label: "Visitante" }
+      ]
+    },
+    {
+      key: "unit",
+      label: "Unidade",
+      type: "select",
+      required: true,
+      placeholder: "",
+      helperText: "",
+      options: [
+        { value: "CALTINS", label: "CALTINS" },
+        { value: "CALTINS XAMBIOA II", label: "CALTINS XAMBIOA II" },
+        { value: "FORMACAL", label: "FORMACAL" },
+        { value: "GESSOTINS", label: "GESSOTINS" },
+        { value: "MINERAX", label: "MINERAX" },
+        { value: "NATICAL", label: "NATICAL" },
+        { value: "SUPERCAL", label: "SUPERCAL" }
+      ]
+    },
+    {
+      key: "emissionDate",
+      label: "Data",
+      type: "date",
+      required: true,
+      placeholder: "",
+      helperText: "",
+      options: []
+    },
+    {
+      key: "incidentType",
+      label: "Incidente ou desvio",
+      type: "select",
+      required: true,
+      placeholder: "",
+      helperText: "",
+      options: [
+        { value: "Condicao de Risco", label: "Condicao de Risco" },
+        { value: "Desvio Comportamental", label: "Desvio Comportamental" },
+        { value: "Dano Material", label: "Dano Material" },
+        { value: "Quase acidente", label: "Quase acidente" }
+      ]
+    },
+    {
+      key: "detectionOrigin",
+      label: "Origem da deteccao",
+      type: "select",
+      required: true,
+      placeholder: "",
+      helperText: "",
+      options: [
+        { value: "CSL", label: "CSL" },
+        { value: "Inspecao programada", label: "Inspecao programada" },
+        { value: "Inspecao nao programada", label: "Inspecao nao programada" },
+        { value: "Observacao Comportamental", label: "Observacao Comportamental" },
+        { value: "Constatacao espontanea", label: "Constatacao espontanea" },
+        { value: "Auditoria", label: "Auditoria" }
+      ]
+    },
+    {
+      key: "location",
+      label: "Local",
+      type: "text",
+      required: true,
+      placeholder: "Local da ocorrencia",
+      helperText: "",
+      options: []
+    },
+    {
+      key: "description",
+      label: "Descricao",
+      type: "textarea",
+      required: true,
+      placeholder: "Descreva a ocorrencia",
+      helperText: "",
+      options: []
+    },
+    {
+      key: "riskClassification",
+      label: "Classificacao de risco",
+      type: "select",
+      required: true,
+      placeholder: "",
+      helperText: "",
+      options: [
+        { value: "Baixo", label: "Baixo: Situacoes com baixo potencial de causar acidente." },
+        { value: "Medio", label: "Medio: Situacoes que podem causar acidente leve." },
+        { value: "Alto", label: "Alto: Situacoes com alto potencial de acidente grave." },
+        { value: "Critico", label: "Critico: Risco iminente de acidente grave ou fatal." }
+      ]
+    },
+    {
+      key: "immediateAction",
+      label: "Acao imediata",
+      type: "textarea",
+      required: true,
+      placeholder: "Descreva a acao imediata",
+      helperText: "",
+      options: []
+    },
+    {
+      key: "imageFile",
+      label: "Imagem da ocorrencia",
+      type: "file",
+      required: false,
+      placeholder: "",
+      helperText: "Opcional. Voce pode escolher uma foto da galeria ou tirar na hora, dependendo das opcoes do seu celular.",
+      options: []
+    },
+    {
+      key: "status",
+      label: "Status inicial",
+      type: "select",
+      required: true,
+      placeholder: "",
+      helperText: "",
+      options: [
+        { value: "CORRIGIDO", label: "CORRIGIDO" },
+        { value: "VENCIDO", label: "VENCIDO" }
+      ]
+    },
+    {
+      key: "responsibleLeader",
+      label: "Lider responsavel",
+      type: "select",
+      required: false,
+      placeholder: "",
+      helperText: "Se o status for VENCIDO, o lider e obrigatorio. A lista e carregada do cache local quando estiver offline.",
+      options: [
+        { value: "__LEADERS__", label: "Lista dinamica de lideres" }
+      ]
+    }
+  ];
 
   const PAGE_SIZE = 8;
   const CONNECTIVITY_CHECK_INTERVAL = 30000;
@@ -67,7 +215,8 @@
     pushMessagingBound: false,
     pushServiceWorkerRegistration: null,
     ridRealtimeUnsubs: [],
-    tabTransitionDirection: "none"
+    tabTransitionDirection: "none",
+    ridFormSchema: loadStorage(STORAGE_KEYS.ridFormSchema, DEFAULT_RID_FORM_SCHEMA)
   };
 
   const app = document.getElementById("app");
@@ -85,6 +234,176 @@
 
   function saveStorage(key, value) {
     localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function cloneRidFormSchema(schema) {
+    return JSON.parse(JSON.stringify(schema || []));
+  }
+
+  function normalizeRidFormOption(option, index) {
+    const value = String(option?.value ?? "").trim();
+    const label = String(option?.label ?? "").trim();
+    return {
+      value: value || `opcao_${index + 1}`,
+      label: label || value || `Opcao ${index + 1}`
+    };
+  }
+
+  function normalizeRidFormField(field, index) {
+    const label = String(field?.label || "").trim() || `Campo ${index + 1}`;
+    const key = String(field?.key || `campo_${index + 1}`).trim() || `campo_${index + 1}`;
+    const type = ["text", "textarea", "select", "date", "file"].includes(field?.type) ? field.type : "text";
+    const options = Array.isArray(field?.options) ? field.options.map(normalizeRidFormOption) : [];
+    return {
+      key,
+      label,
+      type,
+      required: Boolean(field?.required),
+      placeholder: String(field?.placeholder || "").trim(),
+      helperText: String(field?.helperText || "").trim(),
+      options: type === "select" ? options : []
+    };
+  }
+
+  function normalizeRidFormSchema(schema) {
+    if (!Array.isArray(schema) || !schema.length) return cloneRidFormSchema(DEFAULT_RID_FORM_SCHEMA);
+    return schema.map(normalizeRidFormField);
+  }
+
+  function setRidFormSchema(schema) {
+    state.ridFormSchema = normalizeRidFormSchema(schema);
+    saveStorage(STORAGE_KEYS.ridFormSchema, state.ridFormSchema);
+  }
+
+  async function loadRidFormSchema() {
+    if (!state.online) {
+      setRidFormSchema(state.ridFormSchema);
+      return state.ridFormSchema;
+    }
+
+    try {
+      const snap = await RID_FORM_SETTINGS_DOC.get();
+      const fields = snap.exists ? snap.data()?.fields : null;
+      setRidFormSchema(fields);
+      return state.ridFormSchema;
+    } catch (error) {
+      console.warn("Nao foi possivel carregar o formulario de RID configuravel:", error);
+      setRidFormSchema(state.ridFormSchema);
+      return state.ridFormSchema;
+    }
+  }
+
+  function getLeaderSelectOptions() {
+    return state.leaders.length
+      ? state.leaders.map((leader) => ({ value: leader.id, label: leader.name || "Lider" }))
+      : [];
+  }
+
+  function getRidFieldValue(item, fieldKey) {
+    const customValue = item?.customFields?.[fieldKey]?.value;
+    if (customValue !== undefined && customValue !== null && String(customValue).trim()) return String(customValue);
+
+    switch (fieldKey) {
+      case "contractType": return item?.contractType || "";
+      case "unit": return item?.unit || "";
+      case "emissionDate": return item?.emissionDate ? formatDate(item.emissionDate) : "";
+      case "incidentType": return item?.incidentType || "";
+      case "detectionOrigin": return item?.detectionOrigin || "";
+      case "location": return item?.location || "";
+      case "description": return item?.description || "";
+      case "riskClassification": return item?.riskClassification || "";
+      case "immediateAction": return item?.immediateAction || "";
+      case "status": return item?.status || "";
+      case "responsibleLeader": return item?.responsibleLeaderName || item?.responsibleLeader || "";
+      default: return "";
+    }
+  }
+
+  function getRidDetailsFields(item) {
+    const knownKeys = new Set();
+    const configured = (state.ridFormSchema || []).filter((field) => field.key !== "imageFile" && field.key !== "status").map((field) => {
+      knownKeys.add(field.key);
+      return {
+        label: field.label,
+        value: getRidFieldValue(item, field.key)
+      };
+    }).filter((entry) => String(entry.value || "").trim());
+
+    const extras = Object.entries(item?.customFields || {}).filter(([key, value]) => {
+      const raw = String(value?.value || "").trim();
+      return raw && !knownKeys.has(key);
+    }).map(([, value]) => ({
+      label: value?.label || "Campo extra",
+      value: value?.value || ""
+    }));
+
+    return [
+      { label: "Emitente", value: item?.emitterName || "Nao informado" },
+      ...configured,
+      ...extras
+    ];
+  }
+
+  function renderRidModalField(field, today) {
+    const required = field.required ? "required" : "";
+    const helperText = field.helperText ? `<p class="helper-text">${escapeHtml(field.helperText)}</p>` : "";
+    const placeholder = field.placeholder ? ` placeholder="${escapeHtml(field.placeholder)}"` : "";
+
+    if (field.type === "select") {
+      const isLeaderField = field.key === "responsibleLeader" || (field.options || []).some((option) => option.value === "__LEADERS__");
+      const options = isLeaderField
+        ? [{ value: "", label: "Designar depois" }, ...getLeaderSelectOptions()]
+        : [{ value: "", label: "Selecione..." }, ...(field.options || [])];
+      const optionsHtml = options.map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
+      return `
+        <div class="field">
+          <label>${escapeHtml(field.label)}</label>
+          <select name="${escapeHtml(field.key)}" ${required}>
+            ${optionsHtml}
+          </select>
+          ${helperText}
+        </div>
+      `;
+    }
+
+    if (field.type === "textarea") {
+      return `
+        <div class="field">
+          <label>${escapeHtml(field.label)}</label>
+          <textarea name="${escapeHtml(field.key)}" ${required}${placeholder}></textarea>
+          ${helperText}
+        </div>
+      `;
+    }
+
+    if (field.type === "date") {
+      const value = field.key === "emissionDate" ? ` value="${escapeHtml(today)}"` : "";
+      return `
+        <div class="field">
+          <label>${escapeHtml(field.label)}</label>
+          <input type="date" name="${escapeHtml(field.key)}"${value} ${required}>
+          ${helperText}
+        </div>
+      `;
+    }
+
+    if (field.type === "file") {
+      return `
+        <div class="field">
+          <label>${escapeHtml(field.label)}</label>
+          <input type="file" name="${escapeHtml(field.key)}" accept="image/*" ${required}>
+          ${helperText}
+        </div>
+      `;
+    }
+
+    return `
+      <div class="field">
+        <label>${escapeHtml(field.label)}</label>
+        <input name="${escapeHtml(field.key)}" ${required}${placeholder}>
+        ${helperText}
+      </div>
+    `;
   }
 
   function captureFormDraft(form) {
@@ -767,8 +1086,14 @@
     if (Notification.permission === "denied" || details.includes("permission-blocked")) {
       return "As notificacoes do navegador estao bloqueadas neste celular.";
     }
+    if (details.includes("unsupported") || details.includes("messaging/unsupported-browser")) {
+      return "Este navegador do celular nao oferece suporte completo para notificacoes push.";
+    }
     if (details.includes("service worker") || details.includes("sw.js")) {
       return "Nao foi possivel iniciar o service worker de notificacoes.";
+    }
+    if (details.includes("vapid") || details.includes("token-subscribe-failed")) {
+      return "O navegador nao conseguiu criar o registro push deste celular.";
     }
     if (details.includes("insufficient permissions")) {
       return "O token foi gerado, mas o Firestore nao deixou salvar.";
@@ -791,6 +1116,9 @@
     if (!canUsePushNotifications()) return null;
     const registration = await ensurePushServiceWorkerRegistration();
     if (!registration) return null;
+    if (!WEB_PUSH_VAPID_KEY) {
+      throw new Error("WEB_PUSH_VAPID_KEY ausente");
+    }
 
     const token = await messaging.getToken({
       vapidKey: WEB_PUSH_VAPID_KEY,
@@ -938,7 +1266,8 @@
       deletedAt: toDate(data.deletedAt)?.toISOString() || null,
       deletedByName: data.deletedBy?.name || "",
       deletedByRole: data.deletedBy?.role || "",
-      deleteRequesterName: data.deleteRequesterName || ""
+      deleteRequesterName: data.deleteRequesterName || "",
+      customFields: data.customFields || {}
     };
   }
 
@@ -1187,6 +1516,7 @@
     if (state.currentUser) renderApp();
 
     try {
+      await loadRidFormSchema();
       await cacheRemoteData();
       await syncPendingMaintenances();
       const assetsUpdated = await refreshOfflineAssets();
@@ -1235,27 +1565,63 @@
     const leaderId = formData.get("responsibleLeader") || "";
     const leader = state.leaders.find((item) => item.id === leaderId);
     const status = String(formData.get("status") || "").toUpperCase();
-
-    return {
+    const payload = {
       emitterId: state.currentUser.uid,
       emitterName: state.currentUserData.name,
       emitterCpf: state.currentUserData.cpf,
-      contractType: formData.get("contractType"),
-      unit: formData.get("unit"),
+      contractType: "",
+      unit: "",
       sector: state.currentUserData.sector || "",
-      emissionDate: formData.get("emissionDate"),
-      incidentType: formData.get("incidentType"),
-      detectionOrigin: formData.get("detectionOrigin"),
-      location: formData.get("location"),
-      description: formData.get("description"),
-      riskClassification: formData.get("riskClassification"),
-      immediateAction: formData.get("immediateAction"),
+      emissionDate: new Date().toISOString().slice(0, 10),
+      incidentType: "",
+      detectionOrigin: "",
+      location: "",
+      description: "",
+      riskClassification: "",
+      immediateAction: "",
       image: null,
       status,
       responsibleLeader: leaderId,
       responsibleLeaderName: leader?.name || "",
+      customFields: {},
       localCreatedAt: new Date().toISOString()
     };
+
+    state.ridFormSchema.forEach((field) => {
+      if (!field?.key || field.type === "file") return;
+      const rawValue = formData.get(field.key);
+      const value = String(rawValue ?? "").trim();
+
+      switch (field.key) {
+        case "contractType":
+        case "unit":
+        case "emissionDate":
+        case "incidentType":
+        case "detectionOrigin":
+        case "location":
+        case "description":
+        case "riskClassification":
+        case "immediateAction":
+          payload[field.key] = value;
+          break;
+        case "status":
+          payload.status = value.toUpperCase();
+          break;
+        case "responsibleLeader":
+          payload.responsibleLeader = value;
+          payload.responsibleLeaderName = state.leaders.find((item) => item.id === value)?.name || "";
+          break;
+        default:
+          payload.customFields[field.key] = {
+            label: field.label || field.key,
+            value,
+            type: field.type || "text"
+          };
+          break;
+      }
+    });
+
+    return payload;
   }
 
   async function submitRidToFirestore(payload) {
@@ -1285,6 +1651,7 @@
       status: isCorrectedNow ? "CORRIGIDO" : "VENCIDO",
       responsibleLeader: payload.responsibleLeader || "",
       responsibleLeaderName: payload.responsibleLeaderName || "",
+      customFields: payload.customFields || {},
       emailSent: false,
       emailSentAt: null,
       lastNotifiedLeader: null,
@@ -1428,6 +1795,7 @@
       await syncConnectivityState();
 
       const formData = new FormData(form);
+      const imageField = (state.ridFormSchema || []).find((field) => field.type === "file");
       const status = String(formData.get("status") || "").toUpperCase();
       const leaderId = formData.get("responsibleLeader") || "";
 
@@ -1437,7 +1805,7 @@
       }
 
       const payload = buildRidPayload(formData);
-      payload.image = await prepareRidImage(formData.get("imageFile"));
+      payload.image = await prepareRidImage(formData.get(imageField?.key || "imageFile"));
       payload.imageDataUrl = payload.image?.dataUrl || "";
 
       if (state.online) {
@@ -2017,6 +2385,28 @@
     if (!state.modalOpen) return "";
 
     const today = new Date().toISOString().slice(0, 10);
+    const fieldsHtml = (state.ridFormSchema || []).map((field) => renderRidModalField(field, today)).join("");
+    return `
+      <div class="modal-root" id="rid-modal">
+        <div class="modal-card">
+          <div class="modal-head">
+            <h2>Novo RID</h2>
+            <button type="button" class="close-btn" data-close-modal="true">x</button>
+          </div>
+          <form id="rid-form" class="form-grid">
+            <div class="field">
+              <label>Emitente</label>
+              <input value="${escapeHtml(state.currentUserData.name || "")}" readonly>
+            </div>
+            ${fieldsHtml}
+            <div class="actions">
+              <button class="btn btn-success" type="submit">${state.online ? "Emitir RID" : "Emitir (pendente)"}</button>
+              <button class="btn btn-soft" type="button" data-close-modal="true">Cancelar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
     const leaderOptions = state.leaders.length
       ? state.leaders.map((leader) => `<option value="${escapeHtml(leader.id)}">${escapeHtml(leader.name || "Líder")}</option>`).join("")
       : '<option value="">Nenhum líder disponível no cache</option>';
@@ -2214,6 +2604,83 @@
       String(item.status || "").toUpperCase() === "CORRIGIDO" &&
       !correctiveActions &&
       immediateAction;
+    const detailFields = getRidDetailsFields(item).map((field) => `
+      <div class="field">
+        <label>${escapeHtml(field.label)}</label>
+        <div class="muted" style="color:#213043;">${escapeHtml(field.value || "Nao informado")}</div>
+      </div>
+    `).join("");
+
+    return `
+      <div class="modal-root" id="rid-details-modal">
+        <div class="modal-card">
+          <div class="modal-head">
+            <h2>${item.ridNumber ? `RID #${escapeHtml(formatRidNumber(item.ridNumber))}` : "RID pendente"}</h2>
+            <button type="button" class="close-btn" data-close-modal="true">x</button>
+          </div>
+          <div class="form-grid" style="margin-top:0;">
+            <div class="field">
+              <label>Status</label>
+              <div class="badge ${getBadgeClass(item.status, item.isPendingLocal)}" style="width:max-content;">
+                ${getStatusLabel(item)}
+              </div>
+            </div>
+            ${detailFields}
+            ${item.imageDataUrl ? `
+              <div class="field" style="grid-column:1 / -1;">
+                <label>Imagem da ocorrencia</label>
+                <button
+                  type="button"
+                  data-open-image-viewer="${escapeHtml(item.imageDataUrl)}"
+                  style="display:block; width:100%; margin-top:8px; padding:0; border:0; background:transparent;"
+                  aria-label="Abrir imagem do RID"
+                >
+                  <img src="${escapeHtml(item.imageDataUrl)}" alt="Imagem do RID" style="width:100%; border-radius:18px; border:1px solid rgba(148,163,184,0.22);">
+                </button>
+              </div>
+            ` : ""}
+            ${item.deleted ? `
+              <div class="field">
+                <label>Motivo da exclusao</label>
+                <div class="muted" style="color:#8b1e3f;">
+                  ${escapeHtml(deleteReason || "Motivo nao informado.")}
+                </div>
+              </div>
+              <div class="field">
+                <label>Orientacao</label>
+                <div class="muted" style="color:#6f4b12;">
+                  Para tirar duvidas, entre em contato com o gestor responsavel.
+                </div>
+              </div>
+              <div class="field">
+                <label>Solicitado por</label>
+                <div class="muted" style="color:#6b7280;">
+                  ${escapeHtml(
+                    deleteRequesterName
+                      ? `${deleteRequesterName} | removido em ${deletedAt}`
+                      : deletedByName
+                        ? `${deletedByName}${deletedByRole ? ` (${deletedByRole})` : ""} em ${deletedAt}`
+                        : `Registro removido em ${deletedAt}`
+                  )}
+                </div>
+              </div>
+            ` : ""}
+            ${correctedAtCreation ? `
+              <div class="field">
+                <label>Acao imediata</label>
+                <div class="muted" style="color:#8a6717;">${escapeHtml(immediateAction)}</div>
+              </div>
+            ` : ""}
+            ${correctiveActions ? `
+              <div class="field">
+                <label>Acao corretiva</label>
+                <div class="muted" style="color:#35653b;">${escapeHtml(correctiveActions)}</div>
+              </div>
+            ` : ""}
+          </div>
+        </div>
+      </div>
+    `;
 
     return `
       <div class="modal-root" id="rid-details-modal">
@@ -2744,6 +3211,7 @@
     state.currentUser = { uid: sessionUser.uid };
     state.currentUserData = { id: sessionUser.uid, ...userDoc.data() };
     loadUserCache(sessionUser.uid);
+    await loadRidFormSchema();
     const announcementPromise = maybeShowGlobalAnnouncement();
     const refreshPromise = refreshOfflineExperience({ showSuccessToast: false, showErrorToast: false });
     await announcementPromise;
@@ -2761,6 +3229,7 @@
     state.currentUser = { uid: session.uid };
     state.currentUserData = session.userData;
     loadUserCache(session.uid);
+    void loadRidFormSchema();
     void maybeShowGlobalAnnouncement();
     renderApp();
     return true;

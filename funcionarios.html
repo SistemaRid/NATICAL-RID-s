@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Funcionarios | NATICAL RID's</title>
+  <title>Funcionarios | Sistema RID's</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -32,7 +32,6 @@
     .boot-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.98); display: flex; align-items: center; justify-content: center; z-index: 55; padding: 24px; }
     .hidden-state { display: none !important; }
     .page-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 28px; }
-    .page-header-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 12px; }
     .filter-popover { position: relative; z-index: 50; }
     .filter-panel { position: absolute; top: calc(100% + 10px); right: 0; width: min(100vw - 32px, 420px); padding: 18px; border: 1px solid #e5e7eb; border-radius: 20px; background: white; box-shadow: 0 18px 46px rgba(15, 23, 42, 0.12); display: none; z-index: 80; }
     .filter-panel.visible { display: block; }
@@ -49,7 +48,6 @@
       .sidebar:hover { width: 72px; }
       .nav-label, .logo-text { opacity: 0 !important; transform: translateX(-8px) !important; }
       .page-header { flex-direction: column; align-items: stretch; }
-      .page-header-actions { width: 100%; justify-content: space-between; }
       main.flex-1 { padding: 20px !important; }
       .employee-row { grid-template-columns: 1fr; gap: 10px; }
     }
@@ -120,7 +118,7 @@
         </div>
         <div>
           <p class="text-xs uppercase tracking-[0.2em] text-gray-400 font-semibold">Privado</p>
-          <h1 class="text-xl font-bold text-gray-900">NATICAL RID's</h1>
+          <h1 class="text-xl font-bold text-gray-900">Sistema RID's</h1>
         </div>
       </div>
       <p class="text-sm text-gray-500 mb-6">Entre com sua conta de gestao para visualizar os funcionarios.</p>
@@ -168,21 +166,19 @@
           <h1 class="text-2xl font-bold text-gray-900">Funcionarios</h1>
           <p id="welcomeText" class="text-gray-400 mt-1 text-sm">Lista completa de funcionarios com gestao de cadastro.</p>
         </div>
-        <div class="page-header-actions">
-          <div class="filter-popover">
-            <button id="toggleFiltersButton" class="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium">Filtros</button>
-            <div id="filtersPanel" class="filter-panel">
-              <div class="text-xs uppercase tracking-wider font-semibold text-gray-400 mb-4">Filtros da listagem</div>
-              <div class="space-y-3">
-                <select id="filterSector" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
-                  <option value="">Todos os setores</option>
-                </select>
-                <input id="searchInput" type="text" placeholder="Buscar por nome, email, cpf ou funcao..." class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
-              </div>
-              <div class="flex items-center justify-end gap-3 mt-4">
-                <button id="clearFiltersButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium text-gray-600">Limpar filtros</button>
-                <button id="applyFiltersButton" type="button" class="px-4 py-2.5 rounded-xl bg-black text-white text-sm font-semibold">Filtrar</button>
-              </div>
+        <div class="filter-popover">
+          <button id="toggleFiltersButton" class="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium">Filtros</button>
+          <div id="filtersPanel" class="filter-panel">
+            <div class="text-xs uppercase tracking-wider font-semibold text-gray-400 mb-4">Filtros da listagem</div>
+            <div class="space-y-3">
+              <select id="filterSector" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+                <option value="">Todos os setores</option>
+              </select>
+              <input id="searchInput" type="text" placeholder="Buscar por nome, email, cpf ou funcao..." class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+            </div>
+            <div class="flex items-center justify-end gap-3 mt-4">
+              <button id="clearFiltersButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium text-gray-600">Limpar filtros</button>
+              <button id="applyFiltersButton" type="button" class="px-4 py-2.5 rounded-xl bg-black text-white text-sm font-semibold">Filtrar</button>
             </div>
           </div>
         </div>
@@ -226,76 +222,7 @@
         <button id="employeeModalClose" class="w-10 h-10 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-lg leading-none">x</button>
       </div>
       <form id="employeeForm" class="p-6 space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label for="employeeName" class="text-sm font-medium text-gray-700 block mb-2">Nome</label>
-            <input id="employeeName" type="text" autocapitalize="characters" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 uppercase">
-          </div>
-          <div>
-            <label for="employeeEmail" class="text-sm font-medium text-gray-700 block mb-2">Email</label>
-            <input id="employeeEmail" type="email" autocapitalize="characters" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 uppercase">
-          </div>
-          <div>
-            <label for="employeeCpf" class="text-sm font-medium text-gray-700 block mb-2">CPF</label>
-            <input id="employeeCpf" type="text" maxlength="14" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 uppercase">
-          </div>
-          <div>
-            <label for="employeeUnit" class="text-sm font-medium text-gray-700 block mb-2">Unidade</label>
-            <select id="employeeUnit" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 bg-white uppercase">
-              <option value="">Selecione a unidade</option>
-              <option value="CALTINS">CALTINS</option>
-              <option value="CALTINS XAMBIOA II">CALTINS XAMBIOA II</option>
-              <option value="FORMACAL">FORMACAL</option>
-              <option value="GESSOTINS">GESSOTINS</option>
-              <option value="MINERAX">MINERAX</option>
-              <option value="NATICAL">NATICAL</option>
-              <option value="SUPERCAL">SUPERCAL</option>
-            </select>
-          </div>
-          <div>
-            <label for="employeeSector" class="text-sm font-medium text-gray-700 block mb-2">Setor</label>
-            <select id="employeeSector" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 bg-white uppercase">
-              <option value="">Selecione o setor</option>
-              <option value="ADM">ADM</option>
-              <option value="M. MOVEL">M. MOVEL</option>
-              <option value="M. FIXA">M. FIXA</option>
-              <option value="M. ELETRICA">M. ELETRICA</option>
-              <option value="PRODUCAO">PRODUCAO</option>
-              <option value="MINA">MINA</option>
-            </select>
-          </div>
-          <div>
-            <label for="employeeRole" class="text-sm font-medium text-gray-700 block mb-2">Funcao</label>
-            <input id="employeeRole" type="text" autocapitalize="characters" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 uppercase">
-          </div>
-          <div id="employeeVacationField" class="hidden-state md:col-span-2 rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
-            <div class="text-sm font-semibold text-gray-900">Periodo de ferias</div>
-            <p class="text-xs text-gray-500 mt-1">Ao informar esse periodo, o funcionario fica isento da meta mensal da unidade nos dias correspondentes.</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div>
-                <label for="employeeVacationStart" class="text-sm font-medium text-gray-700 block mb-2">Inicio</label>
-                <input id="employeeVacationStart" type="date" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 bg-white">
-              </div>
-              <div>
-                <label for="employeeVacationEnd" class="text-sm font-medium text-gray-700 block mb-2">Fim</label>
-                <input id="employeeVacationEnd" type="date" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400 bg-white">
-              </div>
-            </div>
-            <button type="button" id="employeeVacationClear" class="mt-4 inline-flex items-center rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
-              Revogar ferias
-            </button>
-          </div>
-          <div id="employeePasswordField">
-            <label for="employeePassword" class="text-sm font-medium text-gray-700 block mb-2">Senha inicial</label>
-            <input id="employeePassword" type="password" minlength="6" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-gray-400">
-          </div>
-          <div id="employeeAdminField" class="hidden-state md:col-span-2">
-            <label class="inline-flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700">
-              <input id="employeeIsAdmin" type="checkbox" class="rounded border-indigo-200">
-              Criar este usuario ja como administrador
-            </label>
-          </div>
-        </div>
+        <div id="employeeFormFields" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
         <p id="employeeFormFeedback" class="text-sm text-red-500 hidden-state"></p>
         <div class="flex items-center justify-end gap-3">
           <button type="button" id="employeeFormCancel" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
@@ -349,9 +276,6 @@
       window.setTimeout(() => footer.classList.remove("visible"), 10000);
     })();
   </script>
-  <script src="user-profile-resolver.js"></script>
   <script src="funcionarios-app.js"></script>
-  <script src="rid-notifications.js"></script>
-  <script src="management-login-tracker.js"></script>
 </body>
 </html>
