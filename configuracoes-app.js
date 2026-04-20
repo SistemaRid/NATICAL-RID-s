@@ -18,8 +18,6 @@
   const ANNOUNCEMENTS_COLLECTION = db.collection("globalAnnouncements");
   const RID_FORM_SETTINGS_DOC = db.collection("appSettings").doc("ridFormSchema");
   const RID_FORM_FIXED_NOTE = "O emitente logado continua sendo mostrado automaticamente no app mobile.";
-  const ANNOUNCEMENT_IMAGE_MAX_BYTES = 350 * 1024;
-  const ANNOUNCEMENT_IMAGE_MAX_DIMENSION = 1440;
   const DEFAULT_RID_FORM_SCHEMA = [
     {
       key: "contractType",
@@ -235,6 +233,8 @@
     profileNameStat: document.getElementById("profileNameStat"),
     profileRoleStat: document.getElementById("profileRoleStat"),
     profileSectorStat: document.getElementById("profileSectorStat"),
+    goalStat: document.getElementById("goalStat"),
+    goalMonthStat: document.getElementById("goalMonthStat"),
     profileName: document.getElementById("profileName"),
     profileCpf: document.getElementById("profileCpf"),
     profileEmail: document.getElementById("profileEmail"),
@@ -247,6 +247,14 @@
     confirmPassword: document.getElementById("confirmPassword"),
     passwordSubmitButton: document.getElementById("passwordSubmitButton"),
     passwordFeedback: document.getElementById("passwordFeedback"),
+    goalNotice: document.getElementById("goalNotice"),
+    goalForm: document.getElementById("goalForm"),
+    goalMonth: document.getElementById("goalMonth"),
+    goalYear: document.getElementById("goalYear"),
+    goalValue: document.getElementById("goalValue"),
+    loadGoalButton: document.getElementById("loadGoalButton"),
+    saveGoalButton: document.getElementById("saveGoalButton"),
+    goalFeedback: document.getElementById("goalFeedback"),
     announcementSection: document.getElementById("announcementSection"),
     announcementNotice: document.getElementById("announcementNotice"),
     announcementForm: document.getElementById("announcementForm"),
@@ -255,6 +263,7 @@
     announcementMessage: document.getElementById("announcementMessage"),
     announcementImage: document.getElementById("announcementImage"),
     announcementImagePreview: document.getElementById("announcementImagePreview"),
+    announcementImagePreviewImg: document.getElementById("announcementImagePreviewImg"),
     announcementDays: document.getElementById("announcementDays"),
     announcementDailyLimit: document.getElementById("announcementDailyLimit"),
     announcementTarget: document.getElementById("announcementTarget"),
@@ -349,77 +358,6 @@
   function formatDateTime(value) {
     const date = value?.toDate ? value.toDate() : new Date(value || "");
     return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("pt-BR");
-  }
-
-  function estimateBase64Bytes(dataUrl) {
-    const base64 = String(dataUrl || "").split(",")[1] || "";
-    return Math.ceil((base64.length * 3) / 4);
-  }
-
-  function readFileAsDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(new Error("Nao foi possivel ler a imagem."));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  function loadImage(dataUrl) {
-    return new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = () => reject(new Error("Nao foi possivel carregar a imagem selecionada."));
-      image.src = dataUrl;
-    });
-  }
-
-  async function normalizeAnnouncementImage(file) {
-    if (!file) return "";
-    const originalDataUrl = await readFileAsDataUrl(file);
-    const image = await loadImage(originalDataUrl);
-    const maxDimension = ANNOUNCEMENT_IMAGE_MAX_DIMENSION;
-    const ratio = Math.min(1, maxDimension / Math.max(image.width || 1, image.height || 1));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round((image.width || 1) * ratio));
-    canvas.height = Math.max(1, Math.round((image.height || 1) * ratio));
-
-    const context = canvas.getContext("2d");
-    if (!context) {
-      throw new Error("Nao foi possivel preparar a imagem do aviso.");
-    }
-
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-    let quality = 0.86;
-    let dataUrl = canvas.toDataURL("image/jpeg", quality);
-    while (estimateBase64Bytes(dataUrl) > ANNOUNCEMENT_IMAGE_MAX_BYTES && quality > 0.42) {
-      quality -= 0.08;
-      dataUrl = canvas.toDataURL("image/jpeg", quality);
-    }
-
-    if (estimateBase64Bytes(dataUrl) > ANNOUNCEMENT_IMAGE_MAX_BYTES) {
-      throw new Error("A foto do aviso ficou grande demais. Use uma imagem menor.");
-    }
-
-    return dataUrl;
-  }
-
-  function renderAnnouncementImagePreview(dataUrl = state.announcementImageDataUrl) {
-    if (!dom.announcementImagePreview) return;
-    if (!dataUrl) {
-      dom.announcementImagePreview.innerHTML = "";
-      dom.announcementImagePreview.classList.add("hidden-state");
-      return;
-    }
-
-    dom.announcementImagePreview.classList.remove("hidden-state");
-    dom.announcementImagePreview.innerHTML = `
-      <div class="rounded-2xl border border-gray-200 bg-white p-3">
-        <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 mb-2">Prévia da foto</div>
-        <img src="${escapeAttribute(dataUrl)}" alt="Prévia da foto do aviso" class="block w-full max-h-56 object-cover rounded-xl border border-gray-100">
-      </div>
-    `;
   }
 
   function cloneRidFormSchema(schema) {
@@ -772,7 +710,29 @@
     dom.announcementTarget.value = "all";
     dom.announcementActive.checked = false;
     state.announcementImageDataUrl = "";
-    renderAnnouncementImagePreview("");
+    dom.announcementImagePreview.classList.add("hidden-state");
+    dom.announcementImagePreviewImg.removeAttribute("src");
+  }
+
+  function updateAnnouncementImagePreview(dataUrl) {
+    state.announcementImageDataUrl = String(dataUrl || "").trim();
+    if (!state.announcementImageDataUrl) {
+      dom.announcementImagePreview.classList.add("hidden-state");
+      dom.announcementImagePreviewImg.removeAttribute("src");
+      return;
+    }
+
+    dom.announcementImagePreviewImg.src = state.announcementImageDataUrl;
+    dom.announcementImagePreview.classList.remove("hidden-state");
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Nao foi possivel ler a imagem selecionada."));
+      reader.readAsDataURL(file);
+    });
   }
 
   function renderAnnouncementList(items) {
@@ -792,7 +752,11 @@
             ${item.isActive ? "Ativo" : "Encerrado"}
           </span>
         </div>
-        ${item.imageDataUrl ? `<div class="mt-3"><img src="${escapeAttribute(item.imageDataUrl)}" alt="Imagem do aviso" class="block w-full max-h-56 object-cover rounded-xl border border-gray-100"></div>` : ""}
+        ${item.imageDataUrl ? `
+          <div class="mt-3">
+            <img src="${escapeHtml(item.imageDataUrl)}" alt="Imagem do aviso" class="w-full max-h-48 object-cover rounded-2xl border border-gray-200">
+          </div>
+        ` : ""}
         <div class="text-sm text-gray-600 mt-3 whitespace-pre-wrap">${escapeHtml(item.message || "")}</div>
         <div class="text-[11px] text-gray-400 mt-3">Atualizado em ${escapeHtml(formatDateTime(item.updatedAt))}</div>
         <div class="flex items-center justify-end gap-2 mt-3">
@@ -818,6 +782,58 @@
     document.querySelectorAll('[data-developer-only-nav="requests"]').forEach((element) => {
       element.classList.toggle("hidden-state", !state.currentUserData?.isDeveloper);
     });
+  }
+
+  async function loadGoal() {
+    const key = getMonthKey(dom.goalMonth.value, dom.goalYear.value);
+    dom.goalFeedback.textContent = "Carregando meta...";
+    try {
+      const snap = await db.collection("goals").doc(key).get();
+      if (snap.exists) {
+        const value = snap.data()?.goal ?? "";
+        dom.goalValue.value = value;
+        dom.goalStat.textContent = String(value);
+        dom.goalMonthStat.textContent = `${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}`;
+        dom.goalNotice.textContent = `Meta manual cadastrada para ${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}.`;
+        dom.goalFeedback.textContent = "Meta carregada com sucesso.";
+      } else {
+        dom.goalValue.value = "";
+        dom.goalStat.textContent = "-";
+        dom.goalMonthStat.textContent = `${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}`;
+        dom.goalNotice.textContent = `Nenhuma meta manual registrada para ${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}.`;
+        dom.goalFeedback.textContent = "Nao existe meta manual para esse mes.";
+      }
+    } catch (error) {
+      dom.goalFeedback.textContent = "Nao foi possivel carregar a meta.";
+    }
+  }
+
+  async function saveGoal(event) {
+    event.preventDefault();
+    if (!state.currentUserData?.isDeveloper) {
+      dom.goalFeedback.textContent = "Apenas desenvolvedor pode salvar meta manual.";
+      return;
+    }
+
+    const value = Number(dom.goalValue.value || 0);
+    const key = getMonthKey(dom.goalMonth.value, dom.goalYear.value);
+    dom.saveGoalButton.disabled = true;
+    dom.goalFeedback.textContent = "Salvando meta...";
+    try {
+      await db.collection("goals").doc(key).set({
+        goal: value,
+        setBy: state.currentUser.uid,
+        setAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      dom.goalStat.textContent = String(value);
+      dom.goalMonthStat.textContent = `${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}`;
+      dom.goalNotice.textContent = `Meta manual atualizada para ${getMonthLabel(dom.goalMonth.value)} de ${dom.goalYear.value}.`;
+      dom.goalFeedback.textContent = "Meta salva com sucesso.";
+    } catch (error) {
+      dom.goalFeedback.textContent = "Nao foi possivel salvar a meta.";
+    } finally {
+      dom.saveGoalButton.disabled = false;
+    }
   }
 
   async function loadAnnouncement() {
@@ -867,13 +883,10 @@
     dom.saveAnnouncementButton.disabled = true;
     dom.announcementFeedback.textContent = "Salvando aviso...";
     try {
-      const imageDataUrl = dom.announcementImage.files?.[0]
-        ? await normalizeAnnouncementImage(dom.announcementImage.files[0])
-        : state.announcementImageDataUrl;
       await ANNOUNCEMENTS_COLLECTION.add({
         title,
         message,
-        imageDataUrl,
+        imageDataUrl: state.announcementImageDataUrl || "",
         startDate,
         daysVisible,
         dailyLimit,
@@ -919,13 +932,12 @@
       dom.announcementTitle.value = String(data.title || "");
       dom.announcementStartDate.value = String(data.startDate || "");
       dom.announcementMessage.value = String(data.message || "");
+      dom.announcementImage.value = "";
+      updateAnnouncementImagePreview(String(data.imageDataUrl || ""));
       dom.announcementDays.value = data.daysVisible ? String(data.daysVisible) : "";
       dom.announcementDailyLimit.value = data.dailyLimit ? String(data.dailyLimit) : "";
       dom.announcementTarget.value = String(data.target || "all");
       dom.announcementActive.checked = Boolean(data.isActive);
-      dom.announcementImage.value = "";
-      state.announcementImageDataUrl = String(data.imageDataUrl || "");
-      renderAnnouncementImagePreview();
       dom.announcementFeedback.textContent = "Campos preenchidos com base no aviso selecionado.";
     } catch (error) {
       dom.announcementFeedback.textContent = "Não foi possível carregar esse aviso para edição.";
@@ -991,11 +1003,18 @@
     dom.profileSector.textContent = formatField(user.sector, "-");
 
     if (user.isDeveloper) {
+      dom.goalForm.classList.remove("hidden-state");
       dom.announcementSection.classList.remove("hidden-state");
       dom.ridFormSection.classList.remove("hidden-state");
+      dom.goalNotice.textContent = "Defina a meta manual que sera usada nas telas administrativas.";
+      dom.goalFeedback.textContent = "";
     } else {
+      dom.goalForm.classList.add("hidden-state");
       dom.announcementSection.classList.add("hidden-state");
       dom.ridFormSection.classList.add("hidden-state");
+      dom.goalNotice.textContent = "A visualizacao de metas manuais e restrita ao perfil de desenvolvedor.";
+      dom.goalFeedback.textContent = "";
+      dom.goalStat.textContent = "-";
     }
   }
 
@@ -1022,31 +1041,28 @@
       await auth.signOut();
     });
 
+    dom.loadGoalButton.addEventListener("click", loadGoal);
+    dom.goalForm.addEventListener("submit", saveGoal);
     dom.passwordForm.addEventListener("submit", changePassword);
     dom.loadAnnouncementButton.addEventListener("click", loadAnnouncement);
-    dom.announcementImage.addEventListener("change", async () => {
-      const file = dom.announcementImage.files?.[0];
-      if (!file) {
-        state.announcementImageDataUrl = "";
-        renderAnnouncementImagePreview("");
-        return;
-      }
-
-      dom.announcementFeedback.textContent = "Preparando foto do aviso...";
-      try {
-        state.announcementImageDataUrl = await normalizeAnnouncementImage(file);
-        renderAnnouncementImagePreview();
-        dom.announcementFeedback.textContent = "Foto pronta para salvar no aviso.";
-      } catch (error) {
-        state.announcementImageDataUrl = "";
-        dom.announcementImage.value = "";
-        renderAnnouncementImagePreview("");
-        dom.announcementFeedback.textContent = error?.message || "Nao foi possivel preparar a foto do aviso.";
-      }
-    });
     dom.clearAnnouncementButton.addEventListener("click", () => {
       resetAnnouncementForm();
       dom.announcementFeedback.textContent = "Campos do aviso limpos.";
+    });
+    dom.announcementImage.addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        updateAnnouncementImagePreview("");
+        return;
+      }
+
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        updateAnnouncementImagePreview(dataUrl);
+      } catch (error) {
+        updateAnnouncementImagePreview("");
+        dom.announcementFeedback.textContent = "Nao foi possivel carregar a imagem do aviso.";
+      }
     });
     dom.announcementForm.addEventListener("submit", saveAnnouncement);
     dom.announcementList.addEventListener("click", (event) => {
@@ -1209,6 +1225,7 @@
     if (window.lucide && typeof window.lucide.createIcons === "function") {
       window.lucide.createIcons();
     }
+    await loadGoal();
     if (state.currentUserData?.isDeveloper) {
       await loadAnnouncement();
       await loadRidFormSchema();
@@ -1216,6 +1233,9 @@
   }
 
   function init() {
+    const now = new Date();
+    dom.goalMonth.value = String(now.getMonth() + 1);
+    dom.goalYear.value = String(now.getFullYear());
     bindListeners();
     if (window.lucide && typeof window.lucide.createIcons === "function") {
       window.lucide.createIcons();
