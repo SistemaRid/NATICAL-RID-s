@@ -15,7 +15,7 @@
   const ANNOUNCEMENTS_COLLECTION = db.collection("globalAnnouncements");
   const RID_FORM_SETTINGS_DOC = db.collection("appSettings").doc("ridFormSchema");
   const messaging = typeof firebase.messaging === "function" ? firebase.messaging() : null;
-  const WEB_PUSH_VAPID_KEY = "BI1bjhLMKixbDQsSZ98G40pFeaYqQnxDShyqYrViqepuybo0U8VtCQcGumv7R6WzaPRoLvkLY_pIK8Q4UGg8mLg";
+  const WEB_PUSH_VAPID_KEY = "BC2FvVfx_PdEvXYqKdMAwZaNetYp_5Ni94FYINhTBxaXZnrhlCFfczJ-ivYtwsErGGcYAIAqUVzRz2HteJSaNuQ";
 
   const STORAGE_KEYS = {
     auth: "ridMobileOfflineAuth",
@@ -297,6 +297,19 @@
     return state.leaders.length
       ? state.leaders.map((leader) => ({ value: leader.id, label: leader.name || "Lider" }))
       : [];
+  }
+
+  function getStatusFieldKey() {
+    const field = (state.ridFormSchema || []).find((item) => item?.key === "status");
+    return field?.key || "status";
+  }
+
+  function getResponsibleLeaderFieldKey() {
+    const field = (state.ridFormSchema || []).find((item) =>
+      item?.key === "responsibleLeader" ||
+      (Array.isArray(item?.options) && item.options.some((option) => option?.value === "__LEADERS__"))
+    );
+    return field?.key || "responsibleLeader";
   }
 
   function getRidFieldValue(item, fieldKey) {
@@ -1077,38 +1090,12 @@
     return digits.padStart(5, "0");
   }
 
-  function isIosLikeDevice() {
-    const ua = navigator.userAgent || "";
-    return /iphone|ipad|ipod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  }
-
-  function isStandalonePwa() {
-    return !!(window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone);
-  }
-
-  function getPushUnavailableReason() {
-    if (!state.online) return "Conecte este celular a internet para ativar as notificacoes.";
-    if (!state.currentUser?.uid) return "Entre na sua conta para ativar as notificacoes do celular.";
-    if (!messaging) return "O Firebase Messaging nao carregou neste navegador.";
-    if (!("Notification" in window)) return "Este navegador nao oferece suporte a notificacoes.";
-    if (!("serviceWorker" in navigator)) return "Este navegador nao oferece suporte a service worker.";
-    if (!("PushManager" in window)) return "Este navegador nao oferece suporte completo para push.";
-    if (isIosLikeDevice() && !isStandalonePwa()) {
-      return "No iPhone/iPad, as notificacoes do PWA so funcionam depois de instalar o app na Tela de Inicio.";
-    }
-    return "";
-  }
-
   function canUsePushNotifications() {
-    return !getPushUnavailableReason();
+    return !!(state.online && state.currentUser?.uid && messaging && "Notification" in window && "serviceWorker" in navigator);
   }
 
   function describePushError(error) {
     const details = `${String(error?.code || "")} ${String(error?.message || "")}`.toLowerCase();
-    const unavailableReason = getPushUnavailableReason();
-    if (unavailableReason) {
-      return unavailableReason;
-    }
     if (Notification.permission === "denied" || details.includes("permission-blocked")) {
       return "As notificacoes do navegador estao bloqueadas neste celular.";
     }
@@ -1192,10 +1179,7 @@
   }
 
   async function requestMobilePushPermission() {
-    if (!canUsePushNotifications()) {
-      showToast(getPushUnavailableReason() || "Nao foi possivel ativar as notificacoes neste celular.", "info");
-      return;
-    }
+    if (!canUsePushNotifications()) return;
     try {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
@@ -1591,9 +1575,11 @@
   }
 
   function buildRidPayload(formData) {
-    const leaderId = formData.get("responsibleLeader") || "";
+    const statusFieldKey = getStatusFieldKey();
+    const responsibleLeaderFieldKey = getResponsibleLeaderFieldKey();
+    const leaderId = String(formData.get(responsibleLeaderFieldKey) || "").trim();
     const leader = state.leaders.find((item) => item.id === leaderId);
-    const status = String(formData.get("status") || "").toUpperCase();
+    const status = String(formData.get(statusFieldKey) || "").toUpperCase();
     const payload = {
       emitterId: state.currentUser.uid,
       emitterName: state.currentUserData.name,
@@ -1633,10 +1619,10 @@
         case "immediateAction":
           payload[field.key] = value;
           break;
-        case "status":
+        case statusFieldKey:
           payload.status = value.toUpperCase();
           break;
-        case "responsibleLeader":
+        case responsibleLeaderFieldKey:
           payload.responsibleLeader = value;
           payload.responsibleLeaderName = state.leaders.find((item) => item.id === value)?.name || "";
           break;
@@ -1825,8 +1811,10 @@
 
       const formData = new FormData(form);
       const imageField = (state.ridFormSchema || []).find((field) => field.type === "file");
-      const status = String(formData.get("status") || "").toUpperCase();
-      const leaderId = formData.get("responsibleLeader") || "";
+      const statusFieldKey = getStatusFieldKey();
+      const responsibleLeaderFieldKey = getResponsibleLeaderFieldKey();
+      const status = String(formData.get(statusFieldKey) || "").toUpperCase();
+      const leaderId = String(formData.get(responsibleLeaderFieldKey) || "").trim();
 
       if (status === "VENCIDO" && !leaderId) {
         showToast("Para RID vencido, selecione um líder.", "error");
