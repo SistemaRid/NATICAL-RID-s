@@ -327,9 +327,26 @@
       .replace(/'/g, "&#39;");
   }
 
+  function hasLegacyAdminFlag(user) {
+    const legacyValue = user?.customFields?.isadmin?.value ?? user?.customFields?.isAdmin?.value;
+    return legacyValue === true || String(legacyValue || "").toLowerCase() === "true";
+  }
+
+  function isAdminUser(user) {
+    return !!(user?.isAdmin || hasLegacyAdminFlag(user));
+  }
+
+  function isDeveloperUser(user) {
+    return !!user?.isDeveloper;
+  }
+
+  function isPrivilegedUser(user = state.currentUserData) {
+    return isAdminUser(user) || isDeveloperUser(user);
+  }
+
   function getRoleLabel(user) {
-    if (user?.isDeveloper) return "Desenvolvedor";
-    if (user?.isAdmin) return "Administrador";
+    if (isDeveloperUser(user)) return "Desenvolvedor";
+    if (isAdminUser(user)) return "Administrador";
     return "Usuario";
   }
 
@@ -412,6 +429,26 @@
       .slice(0, 40);
   }
 
+  function canonicalizeEmployeeFieldKey(value) {
+    const normalized = slugifyRidFieldKey(value);
+    const aliases = {
+      name: "name",
+      email: "email",
+      cpf: "cpf",
+      unit: "unit",
+      sector: "sector",
+      role: "role",
+      function: "function",
+      vacationstart: "vacationStart",
+      vacation_end: "vacationEnd",
+      vacationend: "vacationEnd",
+      password: "password",
+      isadmin: "isAdmin",
+      isdeveloper: "isDeveloper"
+    };
+    return aliases[normalized] || normalized;
+  }
+
   function normalizeRidFormOption(option, index) {
     const value = String(option?.value ?? "").trim();
     const label = String(option?.label ?? "").trim();
@@ -423,7 +460,9 @@
 
   function normalizeRidFormField(field, index) {
     const label = String(field?.label || "").trim() || `Campo ${index + 1}`;
-    const key = slugifyRidFieldKey(field?.key || label) || `campo_${index + 1}`;
+    const key = getCurrentSchemaKey() === "employee"
+      ? (canonicalizeEmployeeFieldKey(field?.key || label) || `campo_${index + 1}`)
+      : (slugifyRidFieldKey(field?.key || label) || `campo_${index + 1}`);
     const type = ["text", "textarea", "select", "date", "file", "email", "password", "checkbox"].includes(field?.type) ? field.type : "text";
     const options = Array.isArray(field?.options) ? field.options.map(normalizeRidFormOption) : [];
     return {
@@ -771,16 +810,16 @@
 
   function updateRoleNavigation() {
     document.querySelectorAll('[data-admin-only-nav="designated"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !(state.currentUserData?.isAdmin || state.currentUserData?.isDeveloper));
+      element.classList.toggle("hidden-state", !isPrivilegedUser());
     });
     document.querySelectorAll('[data-developer-only-nav="control-center"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !state.currentUserData?.isDeveloper);
+      element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
     });
     document.querySelectorAll('[data-privileged-nav="changes"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !state.currentUserData?.isDeveloper);
+      element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
     });
     document.querySelectorAll('[data-developer-only-nav="requests"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !state.currentUserData?.isDeveloper);
+      element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
     });
   }
 
@@ -810,7 +849,7 @@
 
   async function saveGoal(event) {
     event.preventDefault();
-    if (!state.currentUserData?.isDeveloper) {
+    if (!isDeveloperUser(state.currentUserData)) {
       dom.goalFeedback.textContent = "Apenas desenvolvedor pode salvar meta manual.";
       return;
     }
@@ -1002,7 +1041,7 @@
     dom.profileUnit.textContent = formatField(user.unit, "-");
     dom.profileSector.textContent = formatField(user.sector, "-");
 
-    if (user.isDeveloper) {
+    if (isDeveloperUser(user)) {
       dom.goalForm.classList.remove("hidden-state");
       dom.announcementSection.classList.remove("hidden-state");
       dom.ridFormSection.classList.remove("hidden-state");
@@ -1126,10 +1165,14 @@
       if (prop) {
         field[prop] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
         if (prop === "label" && (!field.key || String(field.key).startsWith("campo_") || String(field.key).startsWith("novo_campo"))) {
-          field.key = slugifyRidFieldKey(field.label) || field.key;
+          field.key = getCurrentSchemaKey() === "employee"
+            ? (canonicalizeEmployeeFieldKey(field.label) || field.key)
+            : (slugifyRidFieldKey(field.label) || field.key);
         }
         if (prop === "key") {
-          field.key = slugifyRidFieldKey(event.target.value);
+          field.key = getCurrentSchemaKey() === "employee"
+            ? canonicalizeEmployeeFieldKey(event.target.value)
+            : slugifyRidFieldKey(event.target.value);
         }
         if (prop === "type" && field.type !== "select") {
           field.options = [];
@@ -1226,7 +1269,7 @@
       window.lucide.createIcons();
     }
     await loadGoal();
-    if (state.currentUserData?.isDeveloper) {
+    if (isDeveloperUser(state.currentUserData)) {
       await loadAnnouncement();
       await loadRidFormSchema();
     }

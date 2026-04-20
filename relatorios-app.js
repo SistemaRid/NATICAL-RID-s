@@ -62,26 +62,35 @@
     lateReportModalClose: document.getElementById("lateReportModalClose")
   };
 
-  function isAdminProfile(user = state.currentUserData) {
-    return !!user?.isAdmin;
+  function hasLegacyAdminFlag(user) {
+    const legacyValue = user?.customFields?.isadmin?.value ?? user?.customFields?.isAdmin?.value;
+    return legacyValue === true || String(legacyValue || "").toLowerCase() === "true";
   }
 
-  function isDeveloperProfile(user = state.currentUserData) {
-    return !!(user?.isAdmin && user?.isDeveloper);
+  function isAdminUser(user) {
+    return !!(user?.isAdmin || hasLegacyAdminFlag(user));
+  }
+
+  function isDeveloperUser(user) {
+    return !!user?.isDeveloper;
+  }
+
+  function isPrivilegedUser(user = state.currentUserData) {
+    return isAdminUser(user) || isDeveloperUser(user);
   }
 
   function updateAdminNavigation() {
     document.querySelectorAll('[data-admin-only-nav="designated"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isAdminProfile());
+      element.classList.toggle("hidden-state", !isPrivilegedUser());
     });
     document.querySelectorAll('[data-developer-only-nav="control-center"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isDeveloperProfile());
+      element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
     });
     document.querySelectorAll('[data-privileged-nav="changes"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isDeveloperProfile());
+      element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
     });
     document.querySelectorAll('[data-developer-only-nav="requests"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isDeveloperProfile());
+      element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
     });
   }
 
@@ -623,7 +632,7 @@
     const userDoc = await db.collection("users").doc(user.uid).get();
     state.currentUserData = userDoc.exists ? { id: user.uid, ...userDoc.data() } : null;
 
-    if (!isAdminProfile()) {
+    if (!isPrivilegedUser()) {
       sessionStorage.setItem("ridLoginFeedback", "Sua conta nao tem permissao para este painel.");
       await auth.signOut();
       return;

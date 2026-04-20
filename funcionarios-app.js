@@ -115,18 +115,35 @@
     employeeRemovalRequestSubmit: document.getElementById("employeeRemovalRequestSubmit")
   };
 
+  function hasLegacyAdminFlag(user) {
+    const legacyValue = user?.customFields?.isadmin?.value ?? user?.customFields?.isAdmin?.value;
+    return legacyValue === true || String(legacyValue || "").toLowerCase() === "true";
+  }
+
+  function isAdminUser(user) {
+    return !!(user?.isAdmin || hasLegacyAdminFlag(user));
+  }
+
+  function isDeveloperUser(user) {
+    return !!user?.isDeveloper;
+  }
+
+  function isPrivilegedUser(user = state.currentUserData) {
+    return isAdminUser(user) || isDeveloperUser(user);
+  }
+
   function updateAdminNavigation() {
     document.querySelectorAll('[data-admin-only-nav="designated"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !(state.currentUserData?.isAdmin || state.currentUserData?.isDeveloper));
+      element.classList.toggle("hidden-state", !isPrivilegedUser());
     });
     document.querySelectorAll('[data-developer-only-nav="control-center"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !state.currentUserData?.isDeveloper);
+      element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
     });
     document.querySelectorAll('[data-privileged-nav="changes"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !state.currentUserData?.isDeveloper);
+      element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
     });
     document.querySelectorAll('[data-developer-only-nav="requests"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !state.currentUserData?.isDeveloper);
+      element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
     });
   }
 
@@ -195,9 +212,39 @@
     };
   }
 
+  function normalizeSchemaKey(value) {
+    return String(value || "")
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
+  function canonicalizeEmployeeFieldKey(value) {
+    const normalized = normalizeSchemaKey(value);
+    const aliases = {
+      name: "name",
+      email: "email",
+      cpf: "cpf",
+      unit: "unit",
+      sector: "sector",
+      role: "role",
+      function: "function",
+      vacationstart: "vacationStart",
+      vacation_end: "vacationEnd",
+      vacationend: "vacationEnd",
+      password: "password",
+      isadmin: "isAdmin",
+      isdeveloper: "isDeveloper"
+    };
+    return aliases[normalized] || (String(value || "").trim() || normalized);
+  }
+
   function normalizeFormField(field, index) {
     const allowedTypes = ["text", "textarea", "select", "date", "email", "password", "checkbox"];
-    const key = String(field?.key || `campo_${index + 1}`).trim() || `campo_${index + 1}`;
+    const key = canonicalizeEmployeeFieldKey(field?.key || `campo_${index + 1}`) || `campo_${index + 1}`;
     const label = String(field?.label || "").trim() || `Campo ${index + 1}`;
     const type = allowedTypes.includes(field?.type) ? field.type : "text";
     return {
@@ -259,7 +306,8 @@
 
   function shouldRenderEmployeeField(field, mode) {
     if (field.key === "password") return mode === "create";
-    if (field.key === "isAdmin") return mode === "create" && !!state.currentUserData?.isDeveloper;
+    if (field.key === "isAdmin") return mode === "create" && isDeveloperUser(state.currentUserData);
+    if (field.key === "vacationStart" || field.key === "vacationEnd") return mode === "edit";
     return true;
   }
 
@@ -433,7 +481,28 @@
   }
 
   function getEmployeeRole(employee) {
-    return formatField(employee.function || employee.role || employee.userType || (employee.isDeveloper ? "Desenvolvedor" : employee.isAdmin ? "Administrador" : "Funcionario"));
+    return formatField(employee.function || employee.role || employee.userType || (isDeveloperUser(employee) ? "Desenvolvedor" : isAdminUser(employee) ? "Administrador" : "Funcionario"));
+  }
+
+  function getEmployeeType(employee) {
+    if (isAdminUser(employee) && isDeveloperUser(employee)) {
+      return {
+        label: "DESENVOLVEDOR",
+        className: "developer"
+      };
+    }
+
+    if (isAdminUser(employee) && !isDeveloperUser(employee)) {
+      return {
+        label: "ADMINISTRADOR",
+        className: "admin"
+      };
+    }
+
+    return {
+      label: "FUNCIONARIO",
+      className: "employee"
+    };
   }
 
   function normalizeCpf(value) {
@@ -481,6 +550,12 @@
             <div class="text-sm font-semibold text-gray-900 mt-1 md:mt-0">${escapeHtml(formatField(employee.name))}</div>
           </div>
           <div>
+            <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 md:hidden">Tipo</div>
+            <div class="mt-1 md:mt-0">
+              <span class="employee-type-badge ${escapeHtml(getEmployeeType(employee).className)}">${escapeHtml(getEmployeeType(employee).label)}</span>
+            </div>
+          </div>
+          <div>
             <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 md:hidden">Email</div>
             <div class="text-sm text-gray-700 mt-1 md:mt-0 break-all">${escapeHtml(formatField(employee.email, "Sem email"))}</div>
           </div>
@@ -503,9 +578,9 @@
           </div>
           <div class="flex items-center gap-2 flex-wrap justify-start md:justify-end">
             <button type="button" data-edit-employee="${escapeHtml(employee.id)}" class="px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">Editar</button>
-            ${state.currentUserData?.isDeveloper
+            ${isDeveloperUser(state.currentUserData)
               ? `<button type="button" data-delete-employee="${escapeHtml(employee.id)}" class="px-3 py-2 rounded-xl border border-red-200 bg-red-50 text-sm font-semibold text-red-700">Excluir</button>`
-              : state.currentUserData?.isAdmin
+              : isAdminUser(state.currentUserData)
                 ? `<button type="button" data-request-employee="${escapeHtml(employee.id)}" class="px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 text-sm font-semibold text-amber-700">Solicitar remocao</button>`
                 : ""}
           </div>
@@ -659,7 +734,7 @@
     const sector = getEmployeeFormValue("sector");
     const role = getEmployeeFormValue("role") || getEmployeeFormValue("function");
     const password = getEmployeeFormValue("password");
-    const makeAdmin = getEmployeeFormValue("isAdmin") === "true" && !!state.currentUserData?.isDeveloper;
+    const makeAdmin = getEmployeeFormValue("isAdmin") === "true" && isDeveloperUser(state.currentUserData);
     const { vacationPeriod, error: vacationError } = readVacationPeriodFromForm();
     const customFields = {};
 
@@ -974,7 +1049,7 @@
     const userDoc = await db.collection("users").doc(user.uid).get();
     state.currentUserData = userDoc.exists ? { id: user.uid, ...userDoc.data() } : null;
 
-    if (!state.currentUserData?.isAdmin && !state.currentUserData?.isDeveloper) {
+    if (!isPrivilegedUser()) {
       sessionStorage.setItem("ridLoginFeedback", "Sua conta nao tem permissao para este painel.");
       await auth.signOut();
       return;
