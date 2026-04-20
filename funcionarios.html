@@ -35,12 +35,16 @@
     .filter-popover { position: relative; z-index: 50; }
     .filter-panel { position: absolute; top: calc(100% + 10px); right: 0; width: min(100vw - 32px, 420px); padding: 18px; border: 1px solid #e5e7eb; border-radius: 20px; background: white; box-shadow: 0 18px 46px rgba(15, 23, 42, 0.12); display: none; z-index: 80; }
     .filter-panel.visible { display: block; }
-    .employee-row { display: grid; grid-template-columns: 1.2fr 1fr 150px 150px 150px 150px 220px; gap: 16px; align-items: center; }
+    .employee-row { display: grid; grid-template-columns: 1.2fr 150px 1fr 150px 150px 150px 150px 220px; gap: 16px; align-items: center; }
+    .employee-type-badge { display: inline-flex; align-items: center; justify-content: center; min-height: 30px; padding: 0 12px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .employee-type-badge.employee { background: #e8f1ff; color: #2f5fbf; border: 1px solid #cfe0ff; }
+    .employee-type-badge.admin { background: #ffe9f4; color: #c03d82; border: 1px solid #ffcde3; }
+    .employee-type-badge.developer { background: #f1e8ff; color: #7447c9; border: 1px solid #dccbff; }
     .dashboard-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 60; }
     .dashboard-modal-overlay.visible { display: flex; }
     .dashboard-modal-card { width: min(100%, 760px); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 24px; background: white; box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18); }
     @media (max-width: 1280px) {
-      .employee-row { grid-template-columns: 1.2fr 1fr 150px 140px 140px 140px; }
+      .employee-row { grid-template-columns: 1.2fr 130px 1fr 140px 140px 140px 140px; }
       .employee-row > :last-child { grid-column: 1 / -1; }
     }
     @media (max-width: 920px) {
@@ -199,6 +203,7 @@
         <div class="px-6 py-3 border-b border-gray-100 hidden md:block">
           <div class="employee-row text-[11px] uppercase tracking-wider font-semibold text-gray-400">
             <div>Nome</div>
+            <div>Tipo</div>
             <div>Email</div>
             <div>CPF</div>
             <div>Unidade</div>
