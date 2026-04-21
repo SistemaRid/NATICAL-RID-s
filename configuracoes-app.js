@@ -168,6 +168,18 @@
     { key: "email", label: "Email", type: "email", required: false, placeholder: "email@empresa.com", helperText: "", options: [] },
     { key: "cpf", label: "CPF", type: "text", required: true, placeholder: "000.000.000-00", helperText: "", options: [] },
     {
+      key: "employmentType",
+      label: "Categoria",
+      type: "select",
+      required: true,
+      placeholder: "",
+      helperText: "Defina se o cadastro pertence ao quadro interno ou a um terceiro.",
+      options: [
+        { value: "FUNCIONARIO", label: "Funcionario" },
+        { value: "TERCEIRO", label: "Terceiro" }
+      ]
+    },
+    {
       key: "unit",
       label: "Unidade",
       type: "select",
@@ -435,6 +447,13 @@
       name: "name",
       email: "email",
       cpf: "cpf",
+      tipo: "employmentType",
+      type: "employmentType",
+      employmenttype: "employmentType",
+      employeetype: "employmentType",
+      categoria: "employmentType",
+      tipovinculo: "employmentType",
+      tipousuario: "employmentType",
       unit: "unit",
       sector: "sector",
       role: "role",
@@ -652,6 +671,12 @@
         </div>
       ` : ""}
     `;
+  }
+
+  function syncRidFieldModalHeader() {
+    const field = getActiveRidFormField();
+    if (!field) return;
+    dom.ridFieldModalTitle.textContent = field.label || "Campo";
   }
 
   async function loadRidFormSchema() {
@@ -1168,11 +1193,14 @@
           field.key = getCurrentSchemaKey() === "employee"
             ? (canonicalizeEmployeeFieldKey(field.label) || field.key)
             : (slugifyRidFieldKey(field.label) || field.key);
+          const keyInput = dom.ridFieldModalBody.querySelector('[data-field-prop="key"]');
+          if (keyInput) keyInput.value = field.key;
         }
         if (prop === "key") {
           field.key = getCurrentSchemaKey() === "employee"
             ? canonicalizeEmployeeFieldKey(event.target.value)
             : slugifyRidFieldKey(event.target.value);
+          event.target.value = field.key;
         }
         if (prop === "type" && field.type !== "select") {
           field.options = [];
@@ -1180,10 +1208,12 @@
         if (prop === "type" && field.type === "select" && !field.options.length) {
           field.options = [{ label: "Opcao 1", value: "opcao_1" }];
         }
-        if (prop === "label" || prop === "key" || prop === "type" || prop === "placeholder" || prop === "helperText") {
+        if (prop === "type") {
           renderRidFieldModal();
-          renderRidFormEditor();
+        } else if (prop === "label") {
+          syncRidFieldModalHeader();
         }
+        renderRidFormEditor();
         return;
       }
 
@@ -1193,13 +1223,13 @@
       const option = field.options?.[Number(optionRow?.dataset.optionIndex)];
       if (!option) return;
       option[optionProp] = event.target.value;
+      renderRidFormEditor();
     });
     dom.ridFieldModalBody.addEventListener("change", (event) => {
       if (event.target.dataset.fieldProp === "required") {
         const field = getActiveRidFormField();
         if (!field) return;
         field.required = event.target.checked;
-        renderRidFieldModal();
         renderRidFormEditor();
       }
     });

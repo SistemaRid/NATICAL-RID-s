@@ -23,6 +23,18 @@
     { key: "email", label: "Email", type: "email", required: false, placeholder: "email@empresa.com", helperText: "", options: [] },
     { key: "cpf", label: "CPF", type: "text", required: true, placeholder: "000.000.000-00", helperText: "", options: [] },
     {
+      key: "employmentType",
+      label: "Categoria",
+      type: "select",
+      required: true,
+      placeholder: "",
+      helperText: "Defina se o cadastro pertence ao quadro interno ou a um terceiro.",
+      options: [
+        { value: "FUNCIONARIO", label: "Funcionario" },
+        { value: "TERCEIRO", label: "Terceiro" }
+      ]
+    },
+    {
       key: "unit",
       label: "Unidade",
       type: "select",
@@ -68,6 +80,7 @@
     allUsers: [],
     filters: { sector: "", search: "" },
     draftFilters: { sector: "", search: "" },
+    activeListTab: "internal",
     modalMode: "edit",
     selectedEmployeeId: null,
     actionEmployeeId: null,
@@ -92,7 +105,11 @@
     searchInput: document.getElementById("searchInput"),
     clearFiltersButton: document.getElementById("clearFiltersButton"),
     applyFiltersButton: document.getElementById("applyFiltersButton"),
+    internalEmployeesTab: document.getElementById("internalEmployeesTab"),
+    thirdPartyEmployeesTab: document.getElementById("thirdPartyEmployeesTab"),
+    employeesPanelDescription: document.getElementById("employeesPanelDescription"),
     employeesCount: document.getElementById("employeesCount"),
+    employeesHeaderRow: document.getElementById("employeesHeaderRow"),
     downloadPdfButton: document.getElementById("downloadPdfButton"),
     addEmployeeButton: document.getElementById("addEmployeeButton"),
     employeesList: document.getElementById("employeesList"),
@@ -228,6 +245,13 @@
       name: "name",
       email: "email",
       cpf: "cpf",
+      tipo: "employmentType",
+      type: "employmentType",
+      employmenttype: "employmentType",
+      employeetype: "employmentType",
+      categoria: "employmentType",
+      tipovinculo: "employmentType",
+      tipousuario: "employmentType",
       unit: "unit",
       sector: "sector",
       role: "role",
@@ -293,6 +317,7 @@
       case "name": return String(employee.name || "");
       case "email": return String(employee.email || "");
       case "cpf": return String(employee.cpf || "");
+      case "employmentType": return String(employee.employmentType || "FUNCIONARIO");
       case "unit": return String(employee.unit || "");
       case "sector": return String(employee.sector || "");
       case "role":
@@ -309,6 +334,27 @@
     if (field.key === "isAdmin") return mode === "create" && isDeveloperUser(state.currentUserData);
     if (field.key === "vacationStart" || field.key === "vacationEnd") return mode === "edit";
     return true;
+  }
+
+  function getEmploymentType(employee) {
+    const thirdPartyCompany = String(
+      employee?.customFields?.terceiros?.value ||
+      employee?.customFields?.terceiro?.value ||
+      ""
+    ).trim();
+    if (thirdPartyCompany) return "TERCEIRO";
+
+    const raw = String(
+      employee?.employmentType ||
+      employee?.customFields?.employmentType?.value ||
+      employee?.customFields?.categoria?.value ||
+      ""
+    ).trim().toUpperCase();
+    return raw === "TERCEIRO" ? "TERCEIRO" : "FUNCIONARIO";
+  }
+
+  function isThirdPartyEmployee(employee) {
+    return getEmploymentType(employee) === "TERCEIRO";
   }
 
   function renderEmployeeField(field, mode, employee) {
@@ -484,23 +530,76 @@
     return formatField(employee.function || employee.role || employee.userType || (isDeveloperUser(employee) ? "Desenvolvedor" : isAdminUser(employee) ? "Administrador" : "Funcionario"));
   }
 
+  function getThirdPartyCompany(employee) {
+    return formatField(
+      employee?.customFields?.terceiros?.value ||
+      employee?.customFields?.terceiro?.value,
+      "--"
+    );
+  }
+
   function getEmployeeType(employee) {
-    if (isAdminUser(employee) && isDeveloperUser(employee)) {
+    if (isDeveloperUser(employee)) {
       return {
-        label: "DESENVOLVEDOR",
+        label: "Desenvolvedor",
         className: "developer"
       };
     }
 
-    if (isAdminUser(employee) && !isDeveloperUser(employee)) {
+    if (isAdminUser(employee)) {
       return {
-        label: "ADMINISTRADOR",
+        label: "Administrador",
         className: "admin"
       };
     }
 
+    const configuredType = String(
+      employee?.type ||
+      employee?.tipo ||
+      employee?.customFields?.tipo?.value ||
+      employee?.customFields?.type?.value ||
+      employee?.customFields?.employmentType?.value ||
+      employee?.customFields?.employmenttype?.value ||
+      employee?.customFields?.employeetype?.value ||
+      employee?.customFields?.emplooyetype?.value ||
+      ""
+    ).trim();
+    const normalizedConfiguredType = configuredType.toUpperCase();
+
+    if (!configuredType) {
+      return {
+        label: "--",
+        className: "employee"
+      };
+    }
+
+    if (normalizedConfiguredType.includes("DESENVOLV")) {
+      return {
+        label: configuredType,
+        className: "developer"
+      };
+    }
+
+    if (normalizedConfiguredType.includes("ADMIN")) {
+      return {
+        label: configuredType,
+        className: "admin"
+      };
+    }
+
+    if (
+      normalizedConfiguredType.includes("TERCEIRO CONTRATADO") ||
+      normalizedConfiguredType.includes("TERCEIRO EVENTUAL") ||
+      normalizedConfiguredType.includes("VISITANTE")
+    ) {
+      return {
+        label: configuredType,
+        className: "contractor"
+      };
+    }
+
     return {
-      label: "FUNCIONARIO",
+      label: configuredType,
       className: "employee"
     };
   }
@@ -522,56 +621,79 @@
       .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"));
   }
 
-  function populateSectorFilter() {
-    const currentValue = dom.filterSector.value;
-    const sectors = [...new Set(state.allUsers.map((item) => formatField(item.sector, "")).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
-    dom.filterSector.innerHTML = `<option value="">Todos os setores</option>${sectors.map((sector) => `<option value="${escapeHtml(sector)}">${escapeHtml(sector)}</option>`).join("")}`;
-    dom.filterSector.value = sectors.includes(currentValue) ? currentValue : state.draftFilters.sector || "";
+  function groupEmployeesForDisplay(employees) {
+    return {
+      internal: employees.filter((employee) => !isThirdPartyEmployee(employee)),
+      thirdParty: employees.filter((employee) => isThirdPartyEmployee(employee))
+    };
   }
 
-  function renderEmployees() {
-    const employees = getFilteredEmployees();
-    dom.employeesCount.textContent = `${employees.length} funcionario${employees.length === 1 ? "" : "s"}`;
+  function getActiveEmployeesTabItems(employees) {
+    const grouped = groupEmployeesForDisplay(employees);
+    return state.activeListTab === "thirdParty" ? grouped.thirdParty : grouped.internal;
+  }
 
-    if (!employees.length) {
-      dom.employeesList.innerHTML = `
-        <div class="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-10 text-center">
-          <div class="text-sm font-medium text-gray-500">Nenhum funcionario encontrado com os filtros atuais.</div>
-        </div>
-      `;
-      return;
+  function renderEmployeeTabs(employees) {
+    const grouped = groupEmployeesForDisplay(employees);
+    const internalCount = grouped.internal.length;
+    const thirdPartyCount = grouped.thirdParty.length;
+    const isThirdPartyTab = state.activeListTab === "thirdParty";
+
+    dom.internalEmployeesTab?.classList.toggle("active", !isThirdPartyTab);
+    dom.thirdPartyEmployeesTab?.classList.toggle("active", isThirdPartyTab);
+
+    if (dom.internalEmployeesTab) {
+      dom.internalEmployeesTab.textContent = `Lista de funcionarios (${internalCount})`;
     }
+    if (dom.thirdPartyEmployeesTab) {
+      dom.thirdPartyEmployeesTab.textContent = `Terceiros contratados (${thirdPartyCount})`;
+    }
+    if (dom.employeesPanelDescription) {
+      dom.employeesPanelDescription.textContent = isThirdPartyTab
+        ? "Visualize e edite somente os terceiros contratados cadastrados no sistema."
+        : "Edite cadastros ou abra solicitacoes de remocao por aqui.";
+    }
+  }
 
-    dom.employeesList.innerHTML = employees.map((employee) => `
+  function renderEmployeeCards(employees, showCompanyColumn = false) {
+    return employees.map((employee) => `
       <div class="rounded-2xl border border-gray-100 bg-white px-5 py-5">
-        <div class="employee-row">
-          <div>
-            <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 md:hidden">Nome</div>
-            <div class="text-sm font-semibold text-gray-900 mt-1 md:mt-0">${escapeHtml(formatField(employee.name))}</div>
+        <div class="employee-row ${showCompanyColumn ? "third-party-row" : ""}">
+          <div class="employee-name-cell">
+            <div>
+              <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 md:hidden">Nome</div>
+              <div class="text-sm font-semibold text-gray-900 mt-1 md:mt-0 leading-tight">${escapeHtml(formatField(employee.name))}</div>
+            </div>
           </div>
-          <div>
+          <div class="employee-cell employee-type-cell">
             <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 md:hidden">Tipo</div>
             <div class="mt-1 md:mt-0">
               <span class="employee-type-badge ${escapeHtml(getEmployeeType(employee).className)}">${escapeHtml(getEmployeeType(employee).label)}</span>
             </div>
           </div>
-          <div>
+          ${showCompanyColumn ? `
+            <div class="employee-cell">
+              <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 md:hidden">Empresa</div>
+              <div class="text-sm text-gray-700 mt-1 md:mt-0">${escapeHtml(getThirdPartyCompany(employee))}</div>
+            </div>
+          ` : ""}
+          <div class="employee-cell">
             <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 md:hidden">Email</div>
             <div class="text-sm text-gray-700 mt-1 md:mt-0 break-all">${escapeHtml(formatField(employee.email, "Sem email"))}</div>
           </div>
-          <div>
+          <div class="employee-cell">
             <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 md:hidden">CPF</div>
             <div class="text-sm text-gray-700 mt-1 md:mt-0">${escapeHtml(formatField(employee.cpf))}</div>
           </div>
-          <div>
+          <div class="employee-cell">
             <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 md:hidden">Unidade</div>
             <div class="text-sm text-gray-700 mt-1 md:mt-0">${escapeHtml(formatField(employee.unit))}</div>
           </div>
-          <div>
+          <div class="employee-cell">
             <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 md:hidden">Setor</div>
             <div class="text-sm text-gray-700 mt-1 md:mt-0">${escapeHtml(formatField(employee.sector))}</div>
           </div>
-          <div>
+          <div class="employee-cell">
             <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 md:hidden">Funcao</div>
             <div class="text-sm text-gray-700 mt-1 md:mt-0">${escapeHtml(getEmployeeRole(employee))}</div>
             ${employee.vacationPeriod ? `<div class="text-xs text-amber-700 mt-1">${escapeHtml(formatVacationSummary(employee.vacationPeriod))}</div>` : ""}
@@ -587,6 +709,58 @@
         </div>
       </div>
     `).join("");
+  }
+
+  function populateSectorFilter() {
+    const currentValue = dom.filterSector.value;
+    const sectors = [...new Set(state.allUsers.map((item) => formatField(item.sector, "")).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    dom.filterSector.innerHTML = `<option value="">Todos os setores</option>${sectors.map((sector) => `<option value="${escapeHtml(sector)}">${escapeHtml(sector)}</option>`).join("")}`;
+    dom.filterSector.value = sectors.includes(currentValue) ? currentValue : state.draftFilters.sector || "";
+  }
+
+  function renderEmployees() {
+    const employees = getFilteredEmployees();
+    renderEmployeeTabs(employees);
+    const visibleEmployees = getActiveEmployeesTabItems(employees);
+    const showCompanyColumn = state.activeListTab === "thirdParty";
+    dom.employeesCount.textContent = `${visibleEmployees.length} cadastro${visibleEmployees.length === 1 ? "" : "s"}`;
+
+    if (dom.employeesHeaderRow) {
+      dom.employeesHeaderRow.className = `employee-row text-[11px] uppercase tracking-wider font-semibold text-gray-400${showCompanyColumn ? " third-party-row" : ""}`;
+      dom.employeesHeaderRow.innerHTML = showCompanyColumn
+        ? `
+            <div>Nome</div>
+            <div class="employee-type-header">Tipo</div>
+            <div>Empresa</div>
+            <div>Email</div>
+            <div>CPF</div>
+            <div>Unidade</div>
+            <div>Setor</div>
+            <div>Funcao</div>
+            <div class="employee-actions-header">Acoes</div>
+          `
+        : `
+            <div>Nome</div>
+            <div class="employee-type-header">Tipo</div>
+            <div>Email</div>
+            <div>CPF</div>
+            <div>Unidade</div>
+            <div>Setor</div>
+            <div>Funcao</div>
+            <div class="employee-actions-header">Acoes</div>
+          `;
+    }
+
+    if (!visibleEmployees.length) {
+      dom.employeesList.innerHTML = `
+        <div class="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-10 text-center">
+          <div class="text-sm font-medium text-gray-500">${state.activeListTab === "thirdParty" ? "Nenhum terceiro encontrado com os filtros atuais." : "Nenhum funcionario encontrado com os filtros atuais."}</div>
+        </div>
+      `;
+      return;
+    }
+
+    dom.employeesList.innerHTML = renderEmployeeCards(visibleEmployees, showCompanyColumn);
   }
 
   function renderPage() {
@@ -730,6 +904,7 @@
     const email = getEmployeeFormValue("email").toLowerCase();
     const cpfRaw = getEmployeeFormValue("cpf");
     const cpfClean = normalizeCpf(cpfRaw);
+    const employmentType = getEmployeeFormValue("employmentType") === "TERCEIRO" ? "TERCEIRO" : "FUNCIONARIO";
     const unit = getEmployeeFormValue("unit");
     const sector = getEmployeeFormValue("sector");
     const role = getEmployeeFormValue("role") || getEmployeeFormValue("function");
@@ -761,7 +936,7 @@
     try {
       (state.employeeFormSchema || []).forEach((field) => {
         if (!shouldRenderEmployeeField(field, "create")) return;
-        if (["name", "email", "cpf", "unit", "sector", "role", "function", "vacationStart", "vacationEnd", "password", "isAdmin"].includes(field.key)) return;
+        if (["name", "email", "cpf", "employmentType", "unit", "sector", "role", "function", "vacationStart", "vacationEnd", "password", "isAdmin"].includes(field.key)) return;
         customFields[field.key] = {
           label: field.label || field.key,
           value: getEmployeeFormValue(field.key),
@@ -774,6 +949,7 @@
         name,
         cpf: maskCpf(cpfClean),
         email: email || null,
+        employmentType,
         unit: unit || null,
         sector: sector || null,
         function: role || null,
@@ -782,7 +958,7 @@
         customFields,
         isAdmin: makeAdmin,
         isDeveloper: false,
-        userType: makeAdmin ? "Administrador" : "Funcionario",
+        userType: makeAdmin ? "Administrador" : employmentType === "TERCEIRO" ? "Terceiro" : "Funcionario",
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
       await secondaryAuth.signOut();
@@ -807,6 +983,7 @@
     const name = getEmployeeFormValue("name");
     const email = getEmployeeFormValue("email");
     const cpf = getEmployeeFormValue("cpf");
+    const employmentType = getEmployeeFormValue("employmentType") === "TERCEIRO" ? "TERCEIRO" : "FUNCIONARIO";
     const unit = getEmployeeFormValue("unit");
     const sector = getEmployeeFormValue("sector");
     const role = getEmployeeFormValue("role") || getEmployeeFormValue("function");
@@ -829,7 +1006,7 @@
     try {
       (state.employeeFormSchema || []).forEach((field) => {
         if (!shouldRenderEmployeeField(field, "edit")) return;
-        if (["name", "email", "cpf", "unit", "sector", "role", "function", "vacationStart", "vacationEnd", "password", "isAdmin"].includes(field.key)) return;
+        if (["name", "email", "cpf", "employmentType", "unit", "sector", "role", "function", "vacationStart", "vacationEnd", "password", "isAdmin"].includes(field.key)) return;
         customFields[field.key] = {
           label: field.label || field.key,
           value: getEmployeeFormValue(field.key),
@@ -841,11 +1018,13 @@
         name,
         email,
         cpf,
+        employmentType,
         unit,
         sector,
         function: role,
         role,
         vacationPeriod,
+        userType: employee.isAdmin ? "Administrador" : employmentType === "TERCEIRO" ? "Terceiro" : "Funcionario",
         customFields
       });
       closeEmployeeModal();
@@ -928,6 +1107,14 @@
 
     dom.downloadPdfButton.addEventListener("click", downloadEmployeesPdf);
     dom.addEmployeeButton.addEventListener("click", openCreateEmployeeModal);
+    dom.internalEmployeesTab?.addEventListener("click", () => {
+      state.activeListTab = "internal";
+      renderEmployees();
+    });
+    dom.thirdPartyEmployeesTab?.addEventListener("click", () => {
+      state.activeListTab = "thirdParty";
+      renderEmployees();
+    });
 
 
     dom.clearFiltersButton.addEventListener("click", () => {

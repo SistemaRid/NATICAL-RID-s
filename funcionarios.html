@@ -36,15 +36,28 @@
     .filter-panel { position: absolute; top: calc(100% + 10px); right: 0; width: min(100vw - 32px, 420px); padding: 18px; border: 1px solid #e5e7eb; border-radius: 20px; background: white; box-shadow: 0 18px 46px rgba(15, 23, 42, 0.12); display: none; z-index: 80; }
     .filter-panel.visible { display: block; }
     .employee-row { display: grid; grid-template-columns: 1.2fr 150px 1fr 150px 150px 150px 150px 220px; gap: 16px; align-items: center; }
-    .employee-type-badge { display: inline-flex; align-items: center; justify-content: center; min-height: 30px; padding: 0 12px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .employee-row.third-party-row { grid-template-columns: 1.2fr 170px 170px 1fr 150px 150px 150px 150px 220px; }
+    .employee-cell { display: flex; flex-direction: column; justify-content: center; min-height: 48px; }
+    .employee-name-cell { display: flex; align-items: center; min-height: 48px; }
+    .employee-type-header { transform: translateX(-40%); text-align: center; }
+    .employee-actions-header { transform: translateX(20px); text-align: center; }
+    .employee-type-cell { align-items: center; text-align: center; }
+    .employee-type-cell > div:last-child { width: 100%; display: flex; justify-content: center; transform: translateX(-40%); }
+    .employee-type-badge { display: inline-flex; align-items: center; justify-content: center; width: auto; max-width: min(100%, 170px); min-height: 30px; padding: 6px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; line-height: 1; text-transform: uppercase; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .employee-type-badge.employee { background: #e8f1ff; color: #2f5fbf; border: 1px solid #cfe0ff; }
+    .employee-type-badge.contractor { background: #fff7db; color: #a16207; border: 1px solid #f4d88b; }
     .employee-type-badge.admin { background: #ffe9f4; color: #c03d82; border: 1px solid #ffcde3; }
     .employee-type-badge.developer { background: #f1e8ff; color: #7447c9; border: 1px solid #dccbff; }
+    .employee-list-tabs { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .employee-list-tab { border: 1px solid #e5e7eb; background: #fff; color: #6b7280; border-radius: 999px; padding: 10px 16px; font-size: 13px; font-weight: 700; transition: all 0.18s ease; }
+    .employee-list-tab:hover { background: #f9fafb; color: #111827; }
+    .employee-list-tab.active { background: #111827; color: #fff; border-color: #111827; box-shadow: 0 10px 24px rgba(17, 24, 39, 0.14); }
     .dashboard-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 60; }
     .dashboard-modal-overlay.visible { display: flex; }
     .dashboard-modal-card { width: min(100%, 760px); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 24px; background: white; box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18); }
     @media (max-width: 1280px) {
       .employee-row { grid-template-columns: 1.2fr 130px 1fr 140px 140px 140px 140px; }
+      .employee-row.third-party-row { grid-template-columns: 1.2fr 150px 150px 1fr 140px 140px 140px 140px; }
       .employee-row > :last-child { grid-column: 1 / -1; }
     }
     @media (max-width: 920px) {
@@ -54,6 +67,11 @@
       .page-header { flex-direction: column; align-items: stretch; }
       main.flex-1 { padding: 20px !important; }
       .employee-row { grid-template-columns: 1fr; gap: 10px; }
+      .employee-cell, .employee-name-cell { min-height: 0; }
+      .employee-type-header, .employee-actions-header { transform: none; text-align: left; }
+      .employee-type-cell { align-items: flex-start; text-align: left; }
+      .employee-type-cell > div:last-child { justify-content: flex-start; transform: none; }
+      .employee-type-badge { width: auto; max-width: 100%; }
     }
     @media (max-width: 640px) {
       body { overflow-x: hidden; }
@@ -191,8 +209,11 @@
       <section class="border border-gray-100 rounded-2xl overflow-hidden">
         <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h2 class="font-semibold text-gray-900 text-sm">Lista de funcionarios</h2>
-            <p class="text-xs text-gray-400 mt-1">Edite cadastros ou abra solicitacoes de remocao por aqui.</p>
+            <div class="employee-list-tabs">
+              <button id="internalEmployeesTab" type="button" class="employee-list-tab active">Lista de funcionarios</button>
+              <button id="thirdPartyEmployeesTab" type="button" class="employee-list-tab">Terceiros contratados</button>
+            </div>
+            <p id="employeesPanelDescription" class="text-xs text-gray-400 mt-2">Edite cadastros ou abra solicitacoes de remocao por aqui.</p>
           </div>
           <div class="flex items-center gap-3 flex-wrap">
             <span id="employeesCount" class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold text-gray-600">0 funcionarios</span>
@@ -201,15 +222,15 @@
           </div>
         </div>
         <div class="px-6 py-3 border-b border-gray-100 hidden md:block">
-          <div class="employee-row text-[11px] uppercase tracking-wider font-semibold text-gray-400">
+          <div id="employeesHeaderRow" class="employee-row text-[11px] uppercase tracking-wider font-semibold text-gray-400">
             <div>Nome</div>
-            <div>Tipo</div>
+            <div class="employee-type-header">Tipo</div>
             <div>Email</div>
             <div>CPF</div>
             <div>Unidade</div>
             <div>Setor</div>
             <div>Funcao</div>
-            <div>Acoes</div>
+            <div class="employee-actions-header">Acoes</div>
           </div>
         </div>
         <div id="employeesList" class="p-4 space-y-3"></div>

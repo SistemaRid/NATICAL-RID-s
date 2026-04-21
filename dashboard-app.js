@@ -631,6 +631,27 @@
     return 4;
   }
 
+  function getEmploymentType(user) {
+    const thirdPartyCompany = String(
+      user?.customFields?.terceiros?.value ||
+      user?.customFields?.terceiro?.value ||
+      ""
+    ).trim();
+    if (thirdPartyCompany) return "TERCEIRO";
+
+    const raw = String(
+      user?.employmentType ||
+      user?.customFields?.employmentType?.value ||
+      user?.customFields?.categoria?.value ||
+      ""
+    ).trim().toUpperCase();
+    return raw === "TERCEIRO" ? "TERCEIRO" : "FUNCIONARIO";
+  }
+
+  function isThirdPartyUser(user) {
+    return getEmploymentType(user) === "TERCEIRO";
+  }
+
   function clampDate(date, min, max) {
     if (date < min) return min;
     if (date > max) return max;
@@ -651,6 +672,7 @@
     return (users || []).filter((user) => {
       if (!user || typeof user.name !== "string") return false;
       if (sector && user.sector !== sector) return false;
+      if (isThirdPartyUser(user)) return false;
       return true;
     });
   }
@@ -755,6 +777,7 @@
     const now = new Date();
 
     return state.allUsers
+      .filter((user) => !isThirdPartyUser(user))
       .filter((user) => !period.sector || user.sector === period.sector)
       .filter((user) => !emitters.has(user.id))
       .map((user) => {
@@ -785,6 +808,7 @@
     };
 
     return state.allUsers
+      .filter((user) => !isThirdPartyUser(user))
       .filter((user) => !monthPeriod.sector || user.sector === monthPeriod.sector)
       .map((user) => {
         const userRidList = state.allRids

@@ -10,9 +10,12 @@ const firebaseConfig = {
 const APP_SHELL = [
   "./",
   "./mobile.html",
+  "./mobile-terceiros.html",
   "./mobile.css",
   "./mobile-app.js",
+  "./mobile-terceiros-app.js",
   "./mobile-manifest.json",
+  "./mobile-terceiros-manifest.json",
   "./icon-new.png",
   "./icon.png",
   "./icon-192.png",
