@@ -249,9 +249,46 @@
     };
   }
 
+  function normalizeSchemaToken(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "")
+      .toLowerCase();
+  }
+
+  function getCanonicalRidFieldKey(field) {
+    const keyToken = normalizeSchemaToken(field?.key);
+    const labelToken = normalizeSchemaToken(field?.label);
+    const options = Array.isArray(field?.options) ? field.options : [];
+    const hasLeaderOptions = options.some((option) => normalizeSchemaToken(option?.value) === "leaders");
+    const tokens = new Set([keyToken, labelToken].filter(Boolean));
+
+    if (hasLeaderOptions) return "responsibleLeader";
+
+    const aliases = [
+      { canonical: "contractType", values: ["contracttype", "tipodecontrato", "tipocontrato"] },
+      { canonical: "unit", values: ["unit", "unidade"] },
+      { canonical: "emissionDate", values: ["emissiondate", "data", "datadeemissao", "dataemissao"] },
+      { canonical: "incidentType", values: ["incidenttype", "incidenteoudesvio", "tipodeincidente", "incidente", "desvio"] },
+      { canonical: "detectionOrigin", values: ["detectionorigin", "origemdadeteccao", "origemdadetecao", "origemdedeteccao", "origemdedetecao"] },
+      { canonical: "location", values: ["location", "local"] },
+      { canonical: "description", values: ["description", "descricao", "descricao"] },
+      { canonical: "riskClassification", values: ["riskclassification", "classificacaoderisco", "classificacaorisco"] },
+      { canonical: "immediateAction", values: ["immediateaction", "acaoimediata", "acaoimediata"] },
+      { canonical: "imageFile", values: ["imagefile", "imagemdaocorrencia", "imagemdocorrencia", "imagem", "foto", "anexo"] },
+      { canonical: "status", values: ["status", "statusinicial"] },
+      { canonical: "responsibleLeader", values: ["responsibleleader", "liderresponsavel", "lider", "responsavel"] }
+    ];
+
+    const match = aliases.find((entry) => entry.values.some((alias) => tokens.has(alias)));
+    return match?.canonical || String(field?.key || "").trim() || "";
+  }
+
   function normalizeRidFormField(field, index) {
     const label = String(field?.label || "").trim() || `Campo ${index + 1}`;
-    const key = String(field?.key || `campo_${index + 1}`).trim() || `campo_${index + 1}`;
+    const fallbackKey = String(field?.key || `campo_${index + 1}`).trim() || `campo_${index + 1}`;
+    const key = getCanonicalRidFieldKey(field) || fallbackKey;
     const type = ["text", "textarea", "select", "date", "file"].includes(field?.type) ? field.type : "text";
     const options = Array.isArray(field?.options) ? field.options.map(normalizeRidFormOption) : [];
     return {
@@ -2297,7 +2334,7 @@
             <div class="brand-mark">
               <img class="brand-mark-image" src="icon-192.png" alt="RID">
             </div>
-            <h1 class="hero-title">Sistema RID's Natical</h1>
+            <h1 class="hero-title">Sistema RID's</h1>
             <p class="hero-copy">
               Fa&ccedil;a o primeiro acesso com internet para baixar seus RIDs. Depois disso, o mesmo CPF e senha podem liberar o modo offline neste aparelho.
             </p>
@@ -2676,23 +2713,14 @@
     const item = getSelectedRid();
     if (!item) return "";
 
+    const normalizedStatus = String(item.status || "").toUpperCase();
+    const showOnlyBaseFields = normalizedStatus === "VENCIDO";
     const immediateAction = String(item.immediateAction || "").trim();
     const correctiveActions = String(item.correctiveActions || "").trim();
-    const deleteReason = String(item.deleteReason || "").trim();
-    const deleteRequesterName = String(item.deleteRequesterName || "").trim();
-    const deletedByName = String(item.deletedByName || "").trim();
-    const deletedByRole = String(item.deletedByRole || "").trim();
-    const deletedAt = formatDate(item.deletedAt);
     const correctedAtCreation =
-      String(item.status || "").toUpperCase() === "CORRIGIDO" &&
+      normalizedStatus === "CORRIGIDO" &&
       !correctiveActions &&
       immediateAction;
-    const detailFields = getRidDetailsFields(item).map((field) => `
-      <div class="field">
-        <label>${escapeHtml(field.label)}</label>
-        <div class="muted" style="color:#213043;">${escapeHtml(field.value || "Nao informado")}</div>
-      </div>
-    `).join("");
 
     return `
       <div class="modal-root" id="rid-details-modal">
@@ -2708,8 +2736,15 @@
                 ${getStatusLabel(item)}
               </div>
             </div>
-            ${detailFields}
-            ${item.imageDataUrl ? `
+            <div class="field">
+              <label>Data de emissao</label>
+              <div class="muted" style="color:#213043;">${escapeHtml(formatDate(item.emissionDate || item.localCreatedAt || item.createdAt))}</div>
+            </div>
+            <div class="field" style="grid-column:1 / -1;">
+              <label>Descricao do RID</label>
+              <div class="muted" style="color:#213043;">${escapeHtml(item.description || "Nao informada")}</div>
+            </div>
+            ${!showOnlyBaseFields && item.imageDataUrl ? `
               <div class="field" style="grid-column:1 / -1;">
                 <label>Imagem da ocorrencia</label>
                 <button
@@ -2722,39 +2757,13 @@
                 </button>
               </div>
             ` : ""}
-            ${item.deleted ? `
-              <div class="field">
-                <label>Motivo da exclusao</label>
-                <div class="muted" style="color:#8b1e3f;">
-                  ${escapeHtml(deleteReason || "Motivo nao informado.")}
-                </div>
-              </div>
-              <div class="field">
-                <label>Orientacao</label>
-                <div class="muted" style="color:#6f4b12;">
-                  Para tirar duvidas, entre em contato com o gestor responsavel.
-                </div>
-              </div>
-              <div class="field">
-                <label>Solicitado por</label>
-                <div class="muted" style="color:#6b7280;">
-                  ${escapeHtml(
-                    deleteRequesterName
-                      ? `${deleteRequesterName} | removido em ${deletedAt}`
-                      : deletedByName
-                        ? `${deletedByName}${deletedByRole ? ` (${deletedByRole})` : ""} em ${deletedAt}`
-                        : `Registro removido em ${deletedAt}`
-                  )}
-                </div>
-              </div>
-            ` : ""}
-            ${correctedAtCreation ? `
+            ${!showOnlyBaseFields && correctedAtCreation ? `
               <div class="field">
                 <label>Acao imediata</label>
                 <div class="muted" style="color:#8a6717;">${escapeHtml(immediateAction)}</div>
               </div>
             ` : ""}
-            ${correctiveActions ? `
+            ${!showOnlyBaseFields && correctiveActions ? `
               <div class="field">
                 <label>Acao corretiva</label>
                 <div class="muted" style="color:#35653b;">${escapeHtml(correctiveActions)}</div>

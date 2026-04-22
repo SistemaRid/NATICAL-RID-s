@@ -343,6 +343,12 @@
           <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Acao imediata</div>
           <div class="text-sm text-gray-700 mt-2 leading-6">${escapeHtml(rid.immediateAction || "-")}</div>
         </div>
+        ${rid.imageDataUrl ? `
+          <div class="rounded-2xl border border-gray-100 bg-white px-4 py-4 md:col-span-2">
+            <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Imagem da ocorrencia</div>
+            <img src="${escapeHtml(rid.imageDataUrl)}" alt="Imagem do RID" class="mt-3 w-full rounded-2xl border border-gray-100 object-cover">
+          </div>
+        ` : ""}
         <div class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
           <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Conclusao</div>
           <div class="text-sm font-semibold text-gray-900 mt-2">${escapeHtml(formatDate(rid.conclusionDate))}</div>

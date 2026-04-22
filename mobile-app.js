@@ -195,6 +195,7 @@
     ridDraft: null,
     maintenanceDraft: null,
     selectedRidId: null,
+    selectedRidEditing: false,
     selectedMaintenanceId: null,
     selectedAssignedRidId: null,
     imageViewerSrc: "",
@@ -249,9 +250,46 @@
     };
   }
 
+  function normalizeSchemaToken(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "")
+      .toLowerCase();
+  }
+
+  function getCanonicalRidFieldKey(field) {
+    const keyToken = normalizeSchemaToken(field?.key);
+    const labelToken = normalizeSchemaToken(field?.label);
+    const options = Array.isArray(field?.options) ? field.options : [];
+    const hasLeaderOptions = options.some((option) => normalizeSchemaToken(option?.value) === "leaders");
+    const tokens = new Set([keyToken, labelToken].filter(Boolean));
+
+    if (hasLeaderOptions) return "responsibleLeader";
+
+    const aliases = [
+      { canonical: "contractType", values: ["contracttype", "tipodecontrato", "tipocontrato"] },
+      { canonical: "unit", values: ["unit", "unidade"] },
+      { canonical: "emissionDate", values: ["emissiondate", "data", "datadeemissao", "dataemissao"] },
+      { canonical: "incidentType", values: ["incidenttype", "incidenteoudesvio", "tipodeincidente", "incidente", "desvio"] },
+      { canonical: "detectionOrigin", values: ["detectionorigin", "origemdadeteccao", "origemdadetecao", "origemdedeteccao", "origemdedetecao"] },
+      { canonical: "location", values: ["location", "local"] },
+      { canonical: "description", values: ["description", "descricao", "descricao"] },
+      { canonical: "riskClassification", values: ["riskclassification", "classificacaoderisco", "classificacaorisco"] },
+      { canonical: "immediateAction", values: ["immediateaction", "acaoimediata", "acaoimediata"] },
+      { canonical: "imageFile", values: ["imagefile", "imagemdaocorrencia", "imagemdocorrencia", "imagem", "foto", "anexo"] },
+      { canonical: "status", values: ["status", "statusinicial"] },
+      { canonical: "responsibleLeader", values: ["responsibleleader", "liderresponsavel", "lider", "responsavel"] }
+    ];
+
+    const match = aliases.find((entry) => entry.values.some((alias) => tokens.has(alias)));
+    return match?.canonical || String(field?.key || "").trim() || "";
+  }
+
   function normalizeRidFormField(field, index) {
     const label = String(field?.label || "").trim() || `Campo ${index + 1}`;
-    const key = String(field?.key || `campo_${index + 1}`).trim() || `campo_${index + 1}`;
+    const fallbackKey = String(field?.key || `campo_${index + 1}`).trim() || `campo_${index + 1}`;
+    const key = getCanonicalRidFieldKey(field) || fallbackKey;
     const type = ["text", "textarea", "select", "date", "file"].includes(field?.type) ? field.type : "text";
     const options = Array.isArray(field?.options) ? field.options.map(normalizeRidFormOption) : [];
     return {
@@ -332,6 +370,29 @@
     }
   }
 
+  function canEditRidDetails() {
+    return Boolean(state.currentUserData?.isDeveloper);
+  }
+
+  function formatDateInputValue(value) {
+    const date = toDate(value);
+    if (!date) return "";
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
+  function getRidFieldEditValue(item, fieldKey, today) {
+    switch (fieldKey) {
+      case "emissionDate":
+        return formatDateInputValue(item?.emissionDate) || today;
+      case "responsibleLeader":
+        return item?.responsibleLeader || "";
+      case "status":
+        return String(item?.status || "").toUpperCase();
+      default:
+        return getRidFieldValue(item, fieldKey);
+    }
+  }
+
   function getRidDetailsFields(item) {
     const knownKeys = new Set();
     const configured = (state.ridFormSchema || []).filter((field) => field.key !== "imageFile" && field.key !== "status").map((field) => {
@@ -357,17 +418,19 @@
     ];
   }
 
-  function renderRidModalField(field, today) {
+  function renderRidModalField(field, today, values = {}, options = {}) {
     const required = field.required ? "required" : "";
     const helperText = field.helperText ? `<p class="helper-text">${escapeHtml(field.helperText)}</p>` : "";
     const placeholder = field.placeholder ? ` placeholder="${escapeHtml(field.placeholder)}"` : "";
+    const currentValue = String(values?.[field.key] ?? "");
+    const selectedIfMatches = (value) => String(value ?? "") === currentValue ? " selected" : "";
 
     if (field.type === "select") {
       const isLeaderField = field.key === "responsibleLeader" || (field.options || []).some((option) => option.value === "__LEADERS__");
       const options = isLeaderField
         ? [{ value: "", label: "Designar depois" }, ...getLeaderSelectOptions()]
         : [{ value: "", label: "Selecione..." }, ...(field.options || [])];
-      const optionsHtml = options.map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
+      const optionsHtml = options.map((option) => `<option value="${escapeHtml(option.value)}"${selectedIfMatches(option.value)}>${escapeHtml(option.label)}</option>`).join("");
       return `
         <div class="field">
           <label>${escapeHtml(field.label)}</label>
@@ -383,14 +446,14 @@
       return `
         <div class="field">
           <label>${escapeHtml(field.label)}</label>
-          <textarea name="${escapeHtml(field.key)}" ${required}${placeholder}></textarea>
+          <textarea name="${escapeHtml(field.key)}" ${required}${placeholder}>${escapeHtml(currentValue)}</textarea>
           ${helperText}
         </div>
       `;
     }
 
     if (field.type === "date") {
-      const value = field.key === "emissionDate" ? ` value="${escapeHtml(today)}"` : "";
+      const value = ` value="${escapeHtml(currentValue || (field.key === "emissionDate" ? today : ""))}"`;
       return `
         <div class="field">
           <label>${escapeHtml(field.label)}</label>
@@ -401,10 +464,23 @@
     }
 
     if (field.type === "file") {
+      const imagePreviewHtml = options.currentImageDataUrl ? `
+        <div style="margin-top:8px;">
+          <img src="${escapeHtml(options.currentImageDataUrl)}" alt="Imagem atual do RID" style="display:block;width:100%;border-radius:18px;border:1px solid rgba(148,163,184,0.22);">
+        </div>
+      ` : "";
+      const removeImageHtml = options.allowImageRemoval && options.currentImageDataUrl ? `
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:0.82rem;color:#415264;">
+          <input type="checkbox" name="__removeRidImage">
+          Remover imagem atual
+        </label>
+      ` : "";
       return `
         <div class="field">
           <label>${escapeHtml(field.label)}</label>
           <input type="file" name="${escapeHtml(field.key)}" accept="image/*" ${required}>
+          ${imagePreviewHtml}
+          ${removeImageHtml}
           ${helperText}
         </div>
       `;
@@ -413,7 +489,7 @@
     return `
       <div class="field">
         <label>${escapeHtml(field.label)}</label>
-        <input name="${escapeHtml(field.key)}" ${required}${placeholder}>
+        <input name="${escapeHtml(field.key)}" value="${escapeHtml(currentValue)}" ${required}${placeholder}>
         ${helperText}
       </div>
     `;
@@ -1690,6 +1766,50 @@
     persistUserCache();
   }
 
+  function updatePendingRid(localId, payload) {
+    const index = state.pendingRids.findIndex((item) => item.localId === localId);
+    if (index === -1) return false;
+    state.pendingRids[index] = {
+      ...state.pendingRids[index],
+      ...payload,
+      imageDataUrl: payload.image?.dataUrl || "",
+      imageContentType: payload.image?.contentType || "",
+      imageOriginalName: payload.image?.originalName || ""
+    };
+    persistUserCache();
+    return true;
+  }
+
+  async function updateRidInFirestore(ridId, payload, currentItem) {
+    const isCorrectedNow = payload.status === "CORRIGIDO";
+    const [year, month, day] = String(payload.emissionDate || "").split("-").map(Number);
+    const emissionDate = new Date(year, (month || 1) - 1, day || 1, 12, 0, 0);
+
+    await db.collection("rids").doc(ridId).update({
+      contractType: payload.contractType,
+      unit: payload.unit,
+      sector: payload.sector,
+      emissionDate: firebase.firestore.Timestamp.fromDate(emissionDate),
+      incidentType: payload.incidentType,
+      detectionOrigin: payload.detectionOrigin,
+      location: payload.location,
+      description: payload.description,
+      riskClassification: payload.riskClassification,
+      immediateAction: payload.immediateAction,
+      imageDataUrl: payload.image?.dataUrl || null,
+      imageContentType: payload.image?.contentType || null,
+      imageOriginalName: payload.image?.originalName || null,
+      status: isCorrectedNow ? "CORRIGIDO" : "VENCIDO",
+      responsibleLeader: payload.responsibleLeader || "",
+      responsibleLeaderName: payload.responsibleLeaderName || "",
+      customFields: payload.customFields || {},
+      conclusionDate: isCorrectedNow
+        ? (currentItem?.conclusionDate ? firebase.firestore.Timestamp.fromDate(toDate(currentItem.conclusionDate)) : firebase.firestore.FieldValue.serverTimestamp())
+        : null,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+
   function buildMaintenancePayload(formData) {
     const assignedTo = formData.get("assignedTo") || "";
     const leader = state.leaders.find((item) => item.id === assignedTo);
@@ -1859,6 +1979,85 @@
     } catch (error) {
       console.error("Erro ao enviar RID:", error);
       showToast(`Erro ao salvar RID: ${error.message}`, "error");
+    } finally {
+      await clearActionOverlay();
+      submitButton.disabled = false;
+    }
+  }
+
+  async function handleRidDetailsEditSubmit(event) {
+    event.preventDefault();
+    if (!canEditRidDetails() || state.actionOverlay) return;
+    const currentItem = getSelectedRid();
+    if (!currentItem) return;
+    const form = event.target;
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+
+    try {
+      await syncConnectivityState();
+
+      const formData = new FormData(form);
+      const imageField = (state.ridFormSchema || []).find((field) => field.type === "file");
+      const statusFieldKey = getStatusFieldKey();
+      const responsibleLeaderFieldKey = getResponsibleLeaderFieldKey();
+      const status = String(formData.get(statusFieldKey) || "").toUpperCase();
+      const leaderId = String(formData.get(responsibleLeaderFieldKey) || "").trim();
+
+      if (status === "VENCIDO" && !leaderId) {
+        showToast("Para RID vencido, selecione um lider.", "error");
+        return;
+      }
+
+      const payload = buildRidPayload(formData);
+      payload.emitterId = currentItem.emitterId || payload.emitterId;
+      payload.emitterName = currentItem.emitterName || payload.emitterName;
+      payload.emitterCpf = currentItem.emitterCpf || payload.emitterCpf;
+      payload.sector = currentItem.sector || payload.sector;
+      payload.localCreatedAt = currentItem.localCreatedAt || payload.localCreatedAt;
+      payload.customFields = {
+        ...(currentItem.customFields || {}),
+        ...(payload.customFields || {})
+      };
+
+      const selectedFile = formData.get(imageField?.key || "imageFile");
+      const shouldRemoveImage = formData.get("__removeRidImage") === "on";
+      if (shouldRemoveImage) {
+        payload.image = null;
+      } else {
+        const newImage = await prepareRidImage(selectedFile);
+        payload.image = newImage || (currentItem.imageDataUrl ? {
+          dataUrl: currentItem.imageDataUrl,
+          contentType: currentItem.imageContentType || "image/jpeg",
+          originalName: currentItem.imageOriginalName || "rid.jpg"
+        } : null);
+      }
+
+      if (currentItem.isPendingLocal) {
+        updatePendingRid(currentItem.localId, payload);
+      } else {
+        if (!state.online) {
+          throw new Error("Conecte-se a internet para editar um RID ja sincronizado.");
+        }
+        if (!currentItem.id) {
+          throw new Error("RID sem identificador valido para edicao.");
+        }
+        const authenticated = await hasAuthenticatedOnlineSession();
+        if (!authenticated) {
+          throw new Error("Sua sessao expirou. Entre novamente para editar o RID.");
+        }
+
+        setActionOverlay("Salvando alteracoes", "Aguarde enquanto o RID e atualizado.");
+        await updateRidInFirestore(currentItem.id, payload, currentItem);
+        await cacheRemoteData();
+      }
+
+      state.selectedRidEditing = false;
+      renderApp();
+      showToast("RID atualizada com sucesso.", "success");
+    } catch (error) {
+      console.error("Erro ao editar RID:", error);
+      showToast(`Erro ao atualizar RID: ${error.message}`, "error");
     } finally {
       await clearActionOverlay();
       submitButton.disabled = false;
@@ -2067,6 +2266,7 @@
   function closeModal() {
     state.modalOpen = false;
     state.maintenanceModalOpen = false;
+    state.selectedRidEditing = false;
     state.ridDraft = null;
     state.maintenanceDraft = null;
     state.selectedRidId = null;
@@ -2182,6 +2382,7 @@
 
   function openRidDetails(ridId) {
     state.selectedRidId = ridId;
+    state.selectedRidEditing = false;
     state.selectedMaintenanceId = null;
     renderApp();
   }
@@ -2231,7 +2432,7 @@
             <div class="brand-mark">
               <img class="brand-mark-image" src="icon-192.png" alt="RID">
             </div>
-            <h1 class="hero-title">Sistema RID's Natical</h1>
+            <h1 class="hero-title">Sistema RID's</h1>
             <p class="hero-copy">
               Fa&ccedil;a o primeiro acesso com internet para baixar seus RIDs. Depois disso, o mesmo CPF e senha podem liberar o modo offline neste aparelho.
             </p>
@@ -2765,6 +2966,72 @@
             ${correctiveActions ? `
               <div class="field">
                 <label>Ação corretiva</label>
+                <div class="muted" style="color:#35653b;">${escapeHtml(correctiveActions)}</div>
+              </div>
+            ` : ""}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderRidDetailsModal() {
+    const item = getSelectedRid();
+    if (!item) return "";
+
+    const normalizedStatus = String(item.status || "").toUpperCase();
+    const showOnlyBaseFields = normalizedStatus === "VENCIDO";
+    const immediateAction = String(item.immediateAction || "").trim();
+    const correctiveActions = String(item.correctiveActions || "").trim();
+    const correctedAtCreation =
+      normalizedStatus === "CORRIGIDO" &&
+      !correctiveActions &&
+      immediateAction;
+
+    return `
+      <div class="modal-root" id="rid-details-modal">
+        <div class="modal-card">
+          <div class="modal-head">
+            <h2>${item.ridNumber ? `RID #${escapeHtml(formatRidNumber(item.ridNumber))}` : "RID pendente"}</h2>
+            <button type="button" class="close-btn" data-close-modal="true">x</button>
+          </div>
+          <div class="form-grid" style="margin-top:0;">
+            <div class="field">
+              <label>Status</label>
+              <div class="badge ${getBadgeClass(item.status, item.isPendingLocal)}" style="width:max-content;">
+                ${getStatusLabel(item)}
+              </div>
+            </div>
+            <div class="field">
+              <label>Data de emissao</label>
+              <div class="muted" style="color:#213043;">${escapeHtml(formatDate(item.emissionDate || item.localCreatedAt || item.createdAt))}</div>
+            </div>
+            <div class="field" style="grid-column:1 / -1;">
+              <label>Descricao do RID</label>
+              <div class="muted" style="color:#213043;">${escapeHtml(item.description || "Nao informada")}</div>
+            </div>
+            ${!showOnlyBaseFields && item.imageDataUrl ? `
+              <div class="field" style="grid-column:1 / -1;">
+                <label>Imagem da ocorrencia</label>
+                <button
+                  type="button"
+                  data-open-image-viewer="${escapeHtml(item.imageDataUrl)}"
+                  style="display:block; width:100%; margin-top:8px; padding:0; border:0; background:transparent;"
+                  aria-label="Abrir imagem do RID"
+                >
+                  <img src="${escapeHtml(item.imageDataUrl)}" alt="Imagem do RID" style="width:100%; border-radius:18px; border:1px solid rgba(148,163,184,0.22);">
+                </button>
+              </div>
+            ` : ""}
+            ${!showOnlyBaseFields && correctedAtCreation ? `
+              <div class="field">
+                <label>Acao imediata</label>
+                <div class="muted" style="color:#8a6717;">${escapeHtml(immediateAction)}</div>
+              </div>
+            ` : ""}
+            ${!showOnlyBaseFields && correctiveActions ? `
+              <div class="field">
+                <label>Acao corretiva</label>
                 <div class="muted" style="color:#35653b;">${escapeHtml(correctiveActions)}</div>
               </div>
             ` : ""}
@@ -3393,5 +3660,6 @@
 
   init();
 })();
+
 
 
