@@ -190,6 +190,10 @@
     dom.filtersPanel.classList.remove("visible");
   }
 
+  function isEditingRidModal() {
+    return dom.ridDetailsModal.classList.contains("visible");
+  }
+
   function showTimedFooter() {
     if (!dom.siteFooter) return;
     if (state.footerTimerId) {
@@ -728,7 +732,7 @@
     if (typeof state.unsubRids === "function") state.unsubRids();
     state.unsubRids = db.collection("rids").onSnapshot((snapshot) => {
       state.allRids = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      if (isPrivilegedUser()) renderRidsPage();
+      if (isPrivilegedUser() && !isEditingRidModal()) renderRidsPage();
     });
   }
 
@@ -791,6 +795,15 @@
     });
     dom.ridDetailsModal.addEventListener("click", (event) => {
       if (event.target === dom.ridDetailsModal) closeRidDetailsModal();
+    });
+    dom.ridDetailsModal.addEventListener("focusin", (event) => {
+      if (window.innerWidth > 640) return;
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!target.matches("input, select, textarea")) return;
+      window.setTimeout(() => {
+        target.scrollIntoView({ block: "center", behavior: "smooth" });
+      }, 180);
     });
     dom.ridDetailsDeleteAction.addEventListener("click", () => {
       const rid = findRidById(state.selectedRidId);

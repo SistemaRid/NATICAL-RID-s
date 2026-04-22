@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RIDs | NATICAL RID's</title>
+  <title>RIDs | Sistema RID's</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -12,8 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="icon.png">
   <style>
-    * { font-family: 'DM Sans', sans-serif; scrollbar-width: none; -ms-overflow-style: none; }
-    *::-webkit-scrollbar { width: 0; height: 0; display: none; }
+    * { font-family: 'DM Sans', sans-serif; }
     html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
     .sidebar { width: 72px; height: 100dvh; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; }
     .sidebar:hover { width: 260px; }
@@ -44,17 +43,9 @@
     .rid-open-button:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08); }
     .rid-clickable-row { cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease; }
     .rid-clickable-row:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08); border-color: #dbe4ee; }
-    .dashboard-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 60; }
+    .dashboard-modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 60; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
     .dashboard-modal-overlay.visible { display: flex; }
-    .dashboard-modal-card { width: min(100%, 760px); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 24px; background: linear-gradient(180deg, #fff8f8 0%, #ffffff 100%); box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18); }
-    .rid-image-viewer-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.84); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 90; }
-    .rid-image-viewer-overlay.visible { display: flex; }
-    .rid-image-viewer-card { width: min(100%, 1100px); height: min(100%, calc(100vh - 48px)); display: flex; }
-    .rid-image-viewer-stage { flex: 1; min-height: 0; border-radius: 24px; background: rgba(2, 6, 23, 0.28); border: 1px solid rgba(255,255,255,0.08); overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: zoom-in; }
-    .rid-image-viewer-stage.zoomed { cursor: grab; }
-    .rid-image-viewer-stage.dragging { cursor: grabbing; }
-    .rid-image-viewer-image { max-width: min(100%, 1000px); max-height: calc(100vh - 96px); border-radius: 18px; transform-origin: center center; transition: transform 0.18s ease; user-select: none; pointer-events: none; }
-    .rid-detail-image-button { display: block; width: 100%; margin-top: 12px; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
+    .dashboard-modal-card { width: min(100%, 760px); max-height: calc(100dvh - 40px); overflow-y: auto; border-radius: 24px; background: linear-gradient(180deg, #fff8f8 0%, #ffffff 100%); box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
     @media (max-width: 1200px) {
       .rid-table-grid { grid-template-columns: 1fr; }
       .rid-table-grid,
@@ -74,6 +65,8 @@
       .sidebar { display: none !important; }
       main.flex-1 { padding: 16px !important; }
       .filter-panel { left: 0; right: auto; width: min(100vw - 32px, 360px); }
+      .dashboard-modal-overlay { align-items: flex-start; padding: 12px; }
+      .dashboard-modal-card { width: 100%; max-height: calc(100dvh - 24px); border-radius: 20px; margin: 0; }
     }
   </style>
   <style>
@@ -136,7 +129,7 @@
         </div>
         <div>
           <p class="text-xs uppercase tracking-[0.2em] text-gray-400 font-semibold">Privado</p>
-          <h1 class="text-xl font-bold text-gray-900">NATICAL RID's</h1>
+          <h1 class="text-xl font-bold text-gray-900">Sistema RID's</h1>
         </div>
       </div>
       <p class="text-sm text-gray-500 mb-6">Entre com sua conta de gestao para visualizar a listagem de RIDs.</p>
@@ -314,18 +307,7 @@
     </div>
   </div>
 
-  <div id="ridImageViewer" class="rid-image-viewer-overlay">
-    <div class="rid-image-viewer-card">
-      <div id="ridImageViewerStage" class="rid-image-viewer-stage">
-        <img id="ridImageViewerImage" class="rid-image-viewer-image" alt="Foto ampliada do RID">
-      </div>
-    </div>
-  </div>
-
   <a id="siteFooter" class="site-footer" href="https://wa.me/5563992076136" target="_blank" rel="noopener noreferrer" aria-label="Falar com Juan Carlos no WhatsApp">&copy; | Todos os direitos reservados. Dev. por Juan Carlos</a>
-  <script src="user-profile-resolver.js"></script>
   <script src="rids-app.js"></script>
-  <script src="rid-notifications.js"></script>
-  <script src="management-login-tracker.js"></script>
 </body>
 </html>
