@@ -1,4 +1,4 @@
-const CACHE_NAME = "rid-mobile-offline-v3";
+const CACHE_NAME = "rid-mobile-offline-v4";
 const firebaseConfig = {
   apiKey: "AIzaSyBVnWDyQXWNf9JFE3S5W_eDqmrp7B4_nTE",
   authDomain: "natical-rids.firebaseapp.com",
