@@ -71,7 +71,8 @@
     { key: "vacationStart", label: "Inicio das ferias", type: "date", required: false, placeholder: "", helperText: "", options: [] },
     { key: "vacationEnd", label: "Fim das ferias", type: "date", required: false, placeholder: "", helperText: "", options: [] },
     { key: "password", label: "Senha inicial", type: "password", required: true, placeholder: "", helperText: "Usado ao criar um novo usuario.", options: [] },
-    { key: "isAdmin", label: "Criar como administrador", type: "checkbox", required: false, placeholder: "", helperText: "Disponivel para desenvolvedor.", options: [] }
+    { key: "isAdmin", label: "Criar como administrador", type: "checkbox", required: false, placeholder: "", helperText: "Disponivel para desenvolvedor.", options: [] },
+    { key: "isObserver", label: "Tornar observador", type: "checkbox", required: false, placeholder: "", helperText: "Permite acesso somente leitura a Inicio, RIDs, Meus RIDs, Funcionarios e Relatorios.", options: [] }
   ];
 
   const state = {
@@ -137,6 +138,11 @@
     return legacyValue === true || String(legacyValue || "").toLowerCase() === "true";
   }
 
+  function hasLegacyObserverFlag(user) {
+    const legacyValue = user?.customFields?.isobserver?.value ?? user?.customFields?.isObserver?.value;
+    return legacyValue === true || String(legacyValue || "").toLowerCase() === "true";
+  }
+
   function isAdminUser(user) {
     return !!(user?.isAdmin || hasLegacyAdminFlag(user));
   }
@@ -145,13 +151,21 @@
     return !!user?.isDeveloper;
   }
 
-  function isPrivilegedUser(user = state.currentUserData) {
-    return isAdminUser(user) || isDeveloperUser(user);
+  function isObserverUser(user) {
+    return !!(user?.isObserver || hasLegacyObserverFlag(user) || String(user?.userType || "").trim().toLowerCase() === "observador");
+  }
+
+  function hasManagementAccess(user = state.currentUserData) {
+    return isAdminUser(user) || isDeveloperUser(user) || isObserverUser(user);
+  }
+
+  function canManageEmployees(user = state.currentUserData) {
+    return !isObserverUser(user) && (isAdminUser(user) || isDeveloperUser(user));
   }
 
   function updateAdminNavigation() {
     document.querySelectorAll('[data-admin-only-nav="designated"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isPrivilegedUser());
+      element.classList.toggle("hidden-state", !canManageEmployees());
     });
     document.querySelectorAll('[data-developer-only-nav="control-center"]').forEach((element) => {
       element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
@@ -196,6 +210,101 @@
   function formatField(value, fallback = "-") {
     const text = String(value ?? "").trim();
     return text || fallback;
+  }
+
+  function getActorRoleLabel() {
+    if (isDeveloperUser(state.currentUserData)) return "DEVELOPER";
+    if (isAdminUser(state.currentUserData)) return "ADMIN";
+    if (isObserverUser(state.currentUserData)) return "OBSERVER";
+    return "USER";
+  }
+
+  function auditNormalizeValue(value) {
+    if (value === undefined) return null;
+    if (value === null) return null;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value?.toDate === "function") return value.toDate().toISOString();
+    if (typeof value?.seconds === "number") return new Date(value.seconds * 1000).toISOString();
+    if (Array.isArray(value)) return value.map(auditNormalizeValue);
+    if (typeof value === "object") {
+      const normalized = {};
+      Object.entries(value).forEach(([key, entry]) => {
+        normalized[key] = auditNormalizeValue(entry);
+      });
+      return normalized;
+    }
+    return value;
+  }
+
+  function getEmployeeAuditSnapshot(employee = {}) {
+    return {
+      name: employee.name || null,
+      email: employee.email || null,
+      cpf: employee.cpf || null,
+      employmentType: employee.employmentType || null,
+      unit: employee.unit || null,
+      sector: employee.sector || null,
+      function: employee.function || null,
+      role: employee.role || null,
+      vacationPeriod: auditNormalizeValue(employee.vacationPeriod || null),
+      isObserver: !!employee.isObserver,
+      isAdmin: !!employee.isAdmin,
+      isDeveloper: !!employee.isDeveloper,
+      userType: employee.userType || null,
+      deleted: !!employee.deleted,
+      status: employee.status || null,
+      deletedAt: auditNormalizeValue(employee.deletedAt || null),
+      deletedBy: auditNormalizeValue(employee.deletedBy || null),
+      deleteReason: employee.deleteReason || null,
+      customFields: auditNormalizeValue(employee.customFields || {})
+    };
+  }
+
+  function auditValuesEqual(left, right) {
+    return JSON.stringify(auditNormalizeValue(left)) === JSON.stringify(auditNormalizeValue(right));
+  }
+
+  function buildEmployeeAuditChanges(beforeSnapshot = {}, afterSnapshot = {}) {
+    const keys = new Set([...Object.keys(beforeSnapshot), ...Object.keys(afterSnapshot)]);
+    const changes = {};
+    keys.forEach((key) => {
+      const from = beforeSnapshot[key] ?? null;
+      const to = afterSnapshot[key] ?? null;
+      if (auditValuesEqual(from, to)) return;
+      changes[key] = { from, to };
+    });
+    return changes;
+  }
+
+  async function recordEmployeeHistory({ employeeId, before = null, after = null, action = "EMPLOYEE_UPDATED", meta = {} }) {
+    if (!employeeId || !state.currentUser?.uid) return;
+
+    const beforeSnapshot = before ? getEmployeeAuditSnapshot(before) : {};
+    const afterSnapshot = after ? getEmployeeAuditSnapshot(after) : {};
+    const changes = buildEmployeeAuditChanges(beforeSnapshot, afterSnapshot);
+
+    await db.collection("employeeHistory").add({
+      employeeId,
+      employeeName: afterSnapshot.name || beforeSnapshot.name || null,
+      employmentType: afterSnapshot.employmentType || beforeSnapshot.employmentType || null,
+      unit: afterSnapshot.unit || beforeSnapshot.unit || null,
+      sector: afterSnapshot.sector || beforeSnapshot.sector || null,
+      action,
+      changedBy: {
+        uid: state.currentUser.uid,
+        name: state.currentUserData?.name || state.currentUser.email || "Usuario",
+        email: state.currentUser.email || "",
+        role: getActorRoleLabel()
+      },
+      changes,
+      before: beforeSnapshot,
+      after: afterSnapshot,
+      meta: {
+        ...meta,
+        sourcePage: "funcionarios.html"
+      },
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
   }
 
   function toDateSafe(value) {
@@ -261,7 +370,8 @@
       vacationend: "vacationEnd",
       password: "password",
       isadmin: "isAdmin",
-      isdeveloper: "isDeveloper"
+      isdeveloper: "isDeveloper",
+      isobserver: "isObserver"
     };
     return aliases[normalized] || (String(value || "").trim() || normalized);
   }
@@ -286,7 +396,12 @@
 
   function normalizeEmployeeFormSchema(schema) {
     if (!Array.isArray(schema) || !schema.length) return cloneSchema(DEFAULT_EMPLOYEE_FORM_SCHEMA);
-    return schema.map(normalizeFormField);
+    const normalized = schema.map(normalizeFormField);
+    if (!normalized.some((field) => field.key === "isObserver")) {
+      const observerField = DEFAULT_EMPLOYEE_FORM_SCHEMA.find((field) => field.key === "isObserver");
+      if (observerField) normalized.push(normalizeFormField(observerField, normalized.length));
+    }
+    return normalized;
   }
 
   function setEmployeeFormSchema(schema) {
@@ -325,6 +440,7 @@
       case "vacationStart": return toDateInputValue(employee.vacationPeriod?.start);
       case "vacationEnd": return toDateInputValue(employee.vacationPeriod?.end);
       case "isAdmin": return employee.isAdmin ? "true" : "";
+      case "isObserver": return isObserverUser(employee) ? "true" : "";
       default: return "";
     }
   }
@@ -332,6 +448,7 @@
   function shouldRenderEmployeeField(field, mode) {
     if (field.key === "password") return mode === "create";
     if (field.key === "isAdmin") return mode === "create" && isDeveloperUser(state.currentUserData);
+    if (field.key === "isObserver") return mode === "edit" && isDeveloperUser(state.currentUserData);
     if (field.key === "vacationStart" || field.key === "vacationEnd") return mode === "edit";
     return true;
   }
@@ -360,7 +477,7 @@
   function renderEmployeeField(field, mode, employee) {
     if (!shouldRenderEmployeeField(field, mode)) return "";
 
-    const required = field.required && !(field.key === "isAdmin") ? "required" : "";
+    const required = field.required && !(field.key === "isAdmin" || field.key === "isObserver") ? "required" : "";
     const value = getEmployeeFormFieldValue(employee, field.key);
     const helper = field.helperText ? `<p class="text-xs text-gray-500 mt-2">${escapeHtml(field.helperText)}</p>` : "";
     const wrapperClass = (field.key === "vacationStart" || field.key === "vacationEnd")
@@ -539,6 +656,13 @@
   }
 
   function getEmployeeType(employee) {
+    if (isObserverUser(employee)) {
+      return {
+        label: "Observador",
+        className: "observer"
+      };
+    }
+
     if (isDeveloperUser(employee)) {
       return {
         label: "Desenvolvedor",
@@ -649,9 +773,15 @@
       dom.thirdPartyEmployeesTab.textContent = `Terceiros contratados (${thirdPartyCount})`;
     }
     if (dom.employeesPanelDescription) {
-      dom.employeesPanelDescription.textContent = isThirdPartyTab
-        ? "Visualize e edite somente os terceiros contratados cadastrados no sistema."
-        : "Edite cadastros ou abra solicitacoes de remocao por aqui.";
+      if (!canManageEmployees()) {
+        dom.employeesPanelDescription.textContent = isThirdPartyTab
+          ? "Visualize somente os terceiros contratados cadastrados no sistema."
+          : "Visualizacao somente leitura dos cadastros.";
+      } else {
+        dom.employeesPanelDescription.textContent = isThirdPartyTab
+          ? "Visualize e edite somente os terceiros contratados cadastrados no sistema."
+          : "Edite cadastros ou abra solicitacoes de remocao por aqui.";
+      }
     }
   }
 
@@ -699,10 +829,12 @@
             ${employee.vacationPeriod ? `<div class="text-xs text-amber-700 mt-1">${escapeHtml(formatVacationSummary(employee.vacationPeriod))}</div>` : ""}
           </div>
           <div class="flex items-center gap-2 flex-wrap justify-start md:justify-end">
-            <button type="button" data-edit-employee="${escapeHtml(employee.id)}" class="px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">Editar</button>
+            ${canManageEmployees()
+              ? `<button type="button" data-edit-employee="${escapeHtml(employee.id)}" class="px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">Editar</button>`
+              : ""}
             ${isDeveloperUser(state.currentUserData)
               ? `<button type="button" data-delete-employee="${escapeHtml(employee.id)}" class="px-3 py-2 rounded-xl border border-red-200 bg-red-50 text-sm font-semibold text-red-700">Excluir</button>`
-              : isAdminUser(state.currentUserData)
+              : canManageEmployees()
                 ? `<button type="button" data-request-employee="${escapeHtml(employee.id)}" class="px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 text-sm font-semibold text-amber-700">Solicitar remocao</button>`
                 : ""}
           </div>
@@ -838,6 +970,7 @@
     dom.pageShell.classList.remove("hidden-state");
     updateAdminNavigation();
     dom.welcomeText.textContent = `Bem-vindo, ${state.currentUserData?.name || "gestor"}. Aqui voce acompanha o cadastro completo de funcionarios.`;
+    dom.addEmployeeButton.classList.toggle("hidden-state", !canManageEmployees());
     renderPage();
     lucide.createIcons();
   }
@@ -847,6 +980,7 @@
   }
 
   function openCreateEmployeeModal() {
+    if (!canManageEmployees()) return;
     state.modalMode = "create";
     state.selectedEmployeeId = null;
     resetEmployeeForm();
@@ -856,6 +990,7 @@
   }
 
   function openEmployeeModal(employeeId) {
+    if (!canManageEmployees()) return;
     const employee = findEmployeeById(employeeId);
     if (!employee) return;
     state.modalMode = "edit";
@@ -900,6 +1035,7 @@
   }
 
   async function createEmployee() {
+    if (!canManageEmployees()) return;
     const name = getEmployeeFormValue("name");
     const email = getEmployeeFormValue("email").toLowerCase();
     const cpfRaw = getEmployeeFormValue("cpf");
@@ -910,6 +1046,7 @@
     const role = getEmployeeFormValue("role") || getEmployeeFormValue("function");
     const password = getEmployeeFormValue("password");
     const makeAdmin = getEmployeeFormValue("isAdmin") === "true" && isDeveloperUser(state.currentUserData);
+    const makeObserver = getEmployeeFormValue("isObserver") === "true";
     const { vacationPeriod, error: vacationError } = readVacationPeriodFromForm();
     const customFields = {};
 
@@ -936,7 +1073,7 @@
     try {
       (state.employeeFormSchema || []).forEach((field) => {
         if (!shouldRenderEmployeeField(field, "create")) return;
-        if (["name", "email", "cpf", "employmentType", "unit", "sector", "role", "function", "vacationStart", "vacationEnd", "password", "isAdmin"].includes(field.key)) return;
+        if (["name", "email", "cpf", "employmentType", "unit", "sector", "role", "function", "vacationStart", "vacationEnd", "password", "isAdmin", "isObserver"].includes(field.key)) return;
         customFields[field.key] = {
           label: field.label || field.key,
           value: getEmployeeFormValue(field.key),
@@ -945,7 +1082,7 @@
       });
 
       const credential = await secondaryAuth.createUserWithEmailAndPassword(authEmail, password);
-      await db.collection("users").doc(credential.user.uid).set({
+      const createdEmployee = {
         name,
         cpf: maskCpf(cpfClean),
         email: email || null,
@@ -956,10 +1093,17 @@
         role: role || null,
         vacationPeriod,
         customFields,
-        isAdmin: makeAdmin,
+        isObserver: makeObserver,
+        isAdmin: makeObserver ? false : makeAdmin,
         isDeveloper: false,
-        userType: makeAdmin ? "Administrador" : employmentType === "TERCEIRO" ? "Terceiro" : "Funcionario",
+        userType: makeObserver ? "Observador" : makeAdmin ? "Administrador" : employmentType === "TERCEIRO" ? "Terceiro" : "Funcionario",
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      await db.collection("users").doc(credential.user.uid).set(createdEmployee);
+      await recordEmployeeHistory({
+        employeeId: credential.user.uid,
+        after: createdEmployee,
+        action: "EMPLOYEE_CREATED"
       });
       await secondaryAuth.signOut();
       closeEmployeeModal();
@@ -972,6 +1116,7 @@
   }
 
   async function saveEmployee() {
+    if (!canManageEmployees()) return;
     if (state.modalMode === "create") {
       await createEmployee();
       return;
@@ -987,6 +1132,7 @@
     const unit = getEmployeeFormValue("unit");
     const sector = getEmployeeFormValue("sector");
     const role = getEmployeeFormValue("role") || getEmployeeFormValue("function");
+    const makeObserver = getEmployeeFormValue("isObserver") === "true";
     const { vacationPeriod, error: vacationError } = readVacationPeriodFromForm();
     const customFields = {};
 
@@ -1006,7 +1152,7 @@
     try {
       (state.employeeFormSchema || []).forEach((field) => {
         if (!shouldRenderEmployeeField(field, "edit")) return;
-        if (["name", "email", "cpf", "employmentType", "unit", "sector", "role", "function", "vacationStart", "vacationEnd", "password", "isAdmin"].includes(field.key)) return;
+        if (["name", "email", "cpf", "employmentType", "unit", "sector", "role", "function", "vacationStart", "vacationEnd", "password", "isAdmin", "isObserver"].includes(field.key)) return;
         customFields[field.key] = {
           label: field.label || field.key,
           value: getEmployeeFormValue(field.key),
@@ -1014,7 +1160,7 @@
         };
       });
 
-      await db.collection("users").doc(employee.id).update({
+      const updatedEmployee = {
         name,
         email,
         cpf,
@@ -1024,8 +1170,21 @@
         function: role,
         role,
         vacationPeriod,
-        userType: employee.isAdmin ? "Administrador" : employmentType === "TERCEIRO" ? "Terceiro" : "Funcionario",
+        isObserver: makeObserver,
+        isAdmin: makeObserver ? false : !!employee.isAdmin,
+        isDeveloper: makeObserver ? false : !!employee.isDeveloper,
+        userType: makeObserver ? "Observador" : employee.isAdmin ? "Administrador" : employmentType === "TERCEIRO" ? "Terceiro" : "Funcionario",
         customFields
+      };
+      await db.collection("users").doc(employee.id).update(updatedEmployee);
+      await recordEmployeeHistory({
+        employeeId: employee.id,
+        before: employee,
+        after: {
+          ...employee,
+          ...updatedEmployee
+        },
+        action: "EMPLOYEE_UPDATED"
       });
       closeEmployeeModal();
     } catch (error) {
@@ -1037,7 +1196,7 @@
   }
 
   async function deleteEmployeeDirectly(employee) {
-    await db.collection("users").doc(employee.id).update({
+    const updatedEmployee = {
       deleted: true,
       status: "EXCLUIDO",
       deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1047,6 +1206,19 @@
         role: "DEV"
       },
       deleteReason: "Exclusao direta pelo desenvolvedor"
+    };
+    await db.collection("users").doc(employee.id).update(updatedEmployee);
+    await recordEmployeeHistory({
+      employeeId: employee.id,
+      before: employee,
+      after: {
+        ...employee,
+        ...updatedEmployee
+      },
+      action: "EMPLOYEE_DELETED",
+      meta: {
+        reason: updatedEmployee.deleteReason
+      }
     });
   }
 
@@ -1059,6 +1231,16 @@
       reason: reason.trim(),
       status: "pending",
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await recordEmployeeHistory({
+      employeeId: employee.id,
+      before: employee,
+      after: employee,
+      action: "EMPLOYEE_REMOVAL_REQUESTED",
+      meta: {
+        reason: reason.trim(),
+        requestStatus: "pending"
+      }
     });
   }
 
@@ -1139,18 +1321,21 @@
     dom.employeesList.addEventListener("click", (event) => {
       const editButton = event.target.closest("[data-edit-employee]");
       if (editButton) {
+        if (!canManageEmployees()) return;
         openEmployeeModal(editButton.getAttribute("data-edit-employee"));
         return;
       }
 
       const deleteButton = event.target.closest("[data-delete-employee]");
       if (deleteButton) {
+        if (!canManageEmployees()) return;
         openEmployeeDeleteConfirmModal(deleteButton.getAttribute("data-delete-employee"));
         return;
       }
 
       const requestButton = event.target.closest("[data-request-employee]");
       if (requestButton) {
+        if (!canManageEmployees()) return;
         openEmployeeRemovalRequestModal(requestButton.getAttribute("data-request-employee"));
       }
     });
@@ -1172,6 +1357,7 @@
     });
 
     dom.employeeDeleteConfirmSubmit.addEventListener("click", async () => {
+      if (!canManageEmployees()) return;
       const employee = findEmployeeById(state.actionEmployeeId);
       if (!employee) return;
       closeEmployeeDeleteConfirmModal();
@@ -1189,6 +1375,7 @@
     });
 
     dom.employeeRemovalRequestSubmit.addEventListener("click", async () => {
+      if (!canManageEmployees()) return;
       const employee = findEmployeeById(state.actionEmployeeId);
       if (!employee) return;
       const reason = String(dom.employeeRemovalReasonInput.value || "").trim();
@@ -1236,7 +1423,7 @@
     const userDoc = await db.collection("users").doc(user.uid).get();
     state.currentUserData = userDoc.exists ? { id: user.uid, ...userDoc.data() } : null;
 
-    if (!isPrivilegedUser()) {
+    if (!hasManagementAccess()) {
       sessionStorage.setItem("ridLoginFeedback", "Sua conta nao tem permissao para este painel.");
       await auth.signOut();
       return;

@@ -20,9 +20,12 @@
     currentUser: null,
     currentUserData: null,
     allHistory: [],
+    ridHistory: [],
+    employeeHistory: [],
     filters: {},
     selectedHistoryId: null,
-    unsubHistory: null
+    unsubRidHistory: null,
+    unsubEmployeeHistory: null
   };
 
   const dom = {
@@ -118,6 +121,22 @@
   }
 
   const FIELD_LABELS = {
+    name: "Nome",
+    email: "Email",
+    cpf: "CPF",
+    employmentType: "Categoria",
+    role: "Funcao",
+    function: "Funcao",
+    userType: "Tipo de usuario",
+    isObserver: "Observador",
+    isAdmin: "Administrador",
+    isDeveloper: "Desenvolvedor",
+    vacationPeriod: "Periodo de ferias",
+    deleted: "Excluido",
+    deletedAt: "Data de exclusao",
+    deletedBy: "Excluido por",
+    deleteReason: "Motivo da exclusao",
+    customFields: "Campos personalizados",
     observations: "Observacoes",
     conclusionDate: "Data de conclusao",
     emissionDate: "Data de emissao",
@@ -151,6 +170,16 @@
     PENDENTE: "Pendente"
   };
 
+  const ACTION_LABELS = {
+    RID_UPDATED: "Atualizacao do RID",
+    RID_REMOVAL_REQUESTED: "Solicitacao de remocao",
+    RID_DELETED: "Exclusao do RID",
+    EMPLOYEE_CREATED: "Criacao de funcionario",
+    EMPLOYEE_UPDATED: "Atualizacao de funcionario",
+    EMPLOYEE_REMOVAL_REQUESTED: "Solicitacao de exclusao de funcionario",
+    EMPLOYEE_DELETED: "Exclusao de funcionario"
+  };
+
   function getChangedByLabel(item) {
     if (item.changedBy && typeof item.changedBy === "object") {
       return item.changedBy.name || item.changedBy.uid || item.changedBy.email || "Desconhecido";
@@ -163,8 +192,40 @@
     if (!role) return "Sem papel";
     if (role === "DEVELOPER") return "Desenvolvedor";
     if (role === "ADMIN") return "Administrador";
+    if (role === "OBSERVER") return "Observador";
     if (role === "USER") return "Usuario";
     return role;
+  }
+
+  function getActionLabel(item) {
+    return ACTION_LABELS[item.action] || formatField(item.meta?.actionLabel || item.action, "Atualizacao");
+  }
+
+  function getRecordTypeLabel(item) {
+    return item.recordType === "EMPLOYEE" ? "Funcionario" : "RID";
+  }
+
+  function getRecordBadgeLabel(item) {
+    if (item.recordType === "EMPLOYEE") {
+      const employeeName = item.employeeName || item.after?.name || item.before?.name || item.employeeId || "-";
+      return `Funcionario: ${employeeName}`;
+    }
+    return `RID #${formatRidNumber(item.ridNumber || item.ridId)}`;
+  }
+
+  function getRecordDetailLabel(item) {
+    if (item.recordType === "EMPLOYEE") {
+      const employmentType = item.employmentType || item.after?.employmentType || item.before?.employmentType || "-";
+      return `Categoria: ${formatField(employmentType, "-")}`;
+    }
+    return `Emitente: ${formatField(item.emitterName, "-")}`;
+  }
+
+  function getRecordModalTitle(item) {
+    if (item.recordType === "EMPLOYEE") {
+      return formatField(item.employeeName || item.after?.name || item.before?.name, "Funcionario");
+    }
+    return `RID #${formatRidNumber(item.ridNumber || item.ridId)}`;
   }
 
   function prettifyFieldName(field) {
@@ -202,19 +263,37 @@
     return text;
   }
 
-  function normalizeHistoryItem(doc) {
+  function normalizeHistoryItem(doc, recordType = "RID") {
     const data = doc.data();
-    return {
+    const baseItem = {
       id: doc.id,
-      ridId: data.ridId || "",
-      ridNumber: data.ridNumber || "",
-      emitterName: data.emitterName || "",
-      leaderName: data.leaderName || data.before?.responsibleLeaderName || "",
       changedBy: data.changedBy || null,
       changes: data.changes || {},
       before: data.before || {},
+      after: data.after || {},
       meta: data.meta || {},
-      createdAt: toDateSafe(data.createdAt) || new Date()
+      action: data.action || "",
+      createdAt: toDateSafe(data.createdAt) || new Date(),
+      recordType
+    };
+
+    if (recordType === "EMPLOYEE") {
+      return {
+        ...baseItem,
+        employeeId: data.employeeId || "",
+        employeeName: data.employeeName || data.after?.name || data.before?.name || "",
+        employmentType: data.employmentType || data.after?.employmentType || data.before?.employmentType || "",
+        unit: data.unit || data.after?.unit || data.before?.unit || "",
+        sector: data.sector || data.after?.sector || data.before?.sector || ""
+      };
+    }
+
+    return {
+      ...baseItem,
+      ridId: data.ridId || "",
+      ridNumber: data.ridNumber || "",
+      emitterName: data.emitterName || "",
+      leaderName: data.leaderName || data.before?.responsibleLeaderName || ""
     };
   }
 
@@ -232,6 +311,25 @@
       from: value?.from,
       to: value?.to
     }));
+  }
+
+  function getMetaEntries(item) {
+    const meta = item.meta || {};
+    const entries = [];
+    if (meta.reason) entries.push({ label: "Motivo", value: meta.reason });
+    if (meta.requestStatus) entries.push({ label: "Status da solicitacao", value: meta.requestStatus });
+    if (meta.sourcePage) entries.push({ label: "Origem", value: meta.sourcePage });
+    return entries;
+  }
+
+  function mergeHistoryCollections() {
+    state.allHistory = [...state.ridHistory, ...state.employeeHistory]
+      .sort((left, right) => {
+        const leftTime = left.createdAt?.getTime?.() || 0;
+        const rightTime = right.createdAt?.getTime?.() || 0;
+        return rightTime - leftTime;
+      });
+    renderList();
   }
 
   function resetFilters() {
@@ -269,8 +367,10 @@
 
     return state.allHistory.filter((item) => {
       if (rid) {
-        const ridText = `${item.ridId} ${item.ridNumber}`.toLowerCase();
-        if (!ridText.includes(rid)) return false;
+        const recordText = item.recordType === "EMPLOYEE"
+          ? `${item.employeeId} ${item.employeeName}`.toLowerCase()
+          : `${item.ridId} ${item.ridNumber}`.toLowerCase();
+        if (!recordText.includes(rid)) return false;
       }
       if (user && !getChangedByLabel(item).toLowerCase().includes(user)) return false;
       if (date) {
@@ -279,11 +379,19 @@
       }
       if (search) {
         const entries = getChangeEntries(item);
+        const metaEntries = getMetaEntries(item);
         const haystack = [
+          item.employeeName,
+          item.employeeId,
+          item.employmentType,
           item.emitterName,
           item.leaderName,
+          getRecordTypeLabel(item),
+          getRecordBadgeLabel(item),
+          getActionLabel(item),
           getChangedByLabel(item),
-          ...entries.flatMap((entry) => [entry.field, entry.from, entry.to])
+          ...entries.flatMap((entry) => [entry.field, entry.from, entry.to]),
+          ...metaEntries.flatMap((entry) => [entry.label, entry.value])
         ].join(" ").toLowerCase();
         if (!haystack.includes(search)) return false;
       }
@@ -317,15 +425,17 @@
           <div class="flex items-start justify-between gap-4 flex-wrap">
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
-                <span class="inline-flex items-center rounded-full bg-gray-900 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">RID #${escapeHtml(formatRidNumber(item.ridNumber || item.ridId))}</span>
+                <span class="inline-flex items-center rounded-full bg-gray-900 px-3 py-1 text-[10px] font-semibold tracking-wide text-white">${escapeHtml(getRecordBadgeLabel(item))}</span>
+                <span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">${escapeHtml(getRecordTypeLabel(item))}</span>
                 <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-600">${escapeHtml(getRoleLabel(item))}</span>
+                <span class="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-700">${escapeHtml(getActionLabel(item))}</span>
               </div>
               <div class="text-sm font-semibold text-gray-900 mt-3">${escapeHtml(getChangedByLabel(item))}</div>
               <div class="text-xs text-gray-400 mt-1">${escapeHtml(formatDateTime(item.createdAt))}</div>
             </div>
             <div class="text-xs text-gray-500 text-right">
               <div>${fields.length} ${fields.length === 1 ? "campo alterado" : "campos alterados"}</div>
-              <div class="mt-1">Emitente: ${escapeHtml(formatField(item.emitterName, "-"))}</div>
+              <div class="mt-1">${escapeHtml(getRecordDetailLabel(item))}</div>
             </div>
           </div>
           <div class="flex flex-wrap gap-2 mt-4">
@@ -350,8 +460,9 @@
     if (!item) return;
     state.selectedHistoryId = historyId;
     const entries = getChangeEntries(item);
+    const metaEntries = getMetaEntries(item);
 
-    dom.historyModalTitle.textContent = `RID #${formatRidNumber(item.ridNumber || item.ridId)}`;
+    dom.historyModalTitle.textContent = getRecordModalTitle(item);
     dom.historyModalBody.innerHTML = `
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
         <div class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
@@ -364,14 +475,38 @@
           <div class="text-sm font-semibold text-gray-900 mt-2">${escapeHtml(formatDateTime(item.createdAt))}</div>
         </div>
         <div class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
-          <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Emitente do RID</div>
-          <div class="text-sm font-semibold text-gray-900 mt-2">${escapeHtml(formatField(item.emitterName, "-"))}</div>
+          <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">${escapeHtml(item.recordType === "EMPLOYEE" ? "Registro" : "Emitente do RID")}</div>
+          <div class="text-sm font-semibold text-gray-900 mt-2">${escapeHtml(item.recordType === "EMPLOYEE" ? getRecordBadgeLabel(item) : formatField(item.emitterName, "-"))}</div>
         </div>
         <div class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
-          <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Lider anterior registrado</div>
-          <div class="text-sm font-semibold text-gray-900 mt-2">${escapeHtml(formatField(item.leaderName || item.before?.responsibleLeaderName, "-"))}</div>
+          <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Tipo de evento</div>
+          <div class="text-sm font-semibold text-gray-900 mt-2">${escapeHtml(getActionLabel(item))}</div>
         </div>
+        ${item.recordType === "RID" ? `
+          <div class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+            <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Lider anterior registrado</div>
+            <div class="text-sm font-semibold text-gray-900 mt-2">${escapeHtml(formatField(item.leaderName || item.before?.responsibleLeaderName, "-"))}</div>
+          </div>
+        ` : `
+          <div class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+            <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">Categoria registrada</div>
+            <div class="text-sm font-semibold text-gray-900 mt-2">${escapeHtml(formatField(item.employmentType || item.after?.employmentType || item.before?.employmentType, "-"))}</div>
+          </div>
+        `}
       </div>
+      ${metaEntries.length ? `
+        <div class="rounded-2xl border border-gray-100 bg-white p-4 mb-5">
+          <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 mb-4">Metadados do evento</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            ${metaEntries.map((entry) => `
+              <div class="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400">${escapeHtml(entry.label)}</div>
+                <div class="text-sm text-gray-800 mt-1 break-words whitespace-pre-wrap">${escapeHtml(formatAuditValue(entry.value))}</div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      ` : ""}
       <div class="rounded-2xl border border-gray-100 bg-white p-4">
         <div class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 mb-4">Campos alterados</div>
         <div class="space-y-3">
@@ -467,19 +602,32 @@
   }
 
   function subscribeHistory() {
-    if (state.unsubHistory) state.unsubHistory();
-    state.unsubHistory = db.collection("ridHistory").orderBy("createdAt", "desc").limit(500).onSnapshot((snapshot) => {
-      state.allHistory = snapshot.docs.map(normalizeHistoryItem);
-      renderList();
+    if (state.unsubRidHistory) state.unsubRidHistory();
+    if (state.unsubEmployeeHistory) state.unsubEmployeeHistory();
+
+    state.unsubRidHistory = db.collection("ridHistory").orderBy("createdAt", "desc").limit(500).onSnapshot((snapshot) => {
+      state.ridHistory = snapshot.docs.map((doc) => normalizeHistoryItem(doc, "RID"));
+      mergeHistoryCollections();
+    }, () => {
+      dom.historyList.innerHTML = `<div class="empty-state">Nao foi possivel carregar o historico de alteracoes.</div>`;
+    });
+
+    state.unsubEmployeeHistory = db.collection("employeeHistory").orderBy("createdAt", "desc").limit(500).onSnapshot((snapshot) => {
+      state.employeeHistory = snapshot.docs.map((doc) => normalizeHistoryItem(doc, "EMPLOYEE"));
+      mergeHistoryCollections();
     }, () => {
       dom.historyList.innerHTML = `<div class="empty-state">Nao foi possivel carregar o historico de alteracoes.</div>`;
     });
   }
 
   function cleanupSubscriptions() {
-    if (state.unsubHistory) {
-      state.unsubHistory();
-      state.unsubHistory = null;
+    if (state.unsubRidHistory) {
+      state.unsubRidHistory();
+      state.unsubRidHistory = null;
+    }
+    if (state.unsubEmployeeHistory) {
+      state.unsubEmployeeHistory();
+      state.unsubEmployeeHistory = null;
     }
   }
 
@@ -498,7 +646,7 @@
     dom.authOverlay.classList.remove("visible");
     dom.pageShell.classList.remove("hidden-state");
     dom.bootOverlay.classList.add("hidden-state");
-    dom.welcomeText.textContent = `Bem-vindo, ${formatField(state.currentUserData?.name, "Usuario")}. Aqui voce acompanha tudo o que foi alterado nos RIDs.`;
+    dom.welcomeText.textContent = `Bem-vindo, ${formatField(state.currentUserData?.name, "Usuario")}. Aqui voce acompanha tudo o que foi alterado em RIDs e funcionarios.`;
     if (window.lucide && typeof window.lucide.createIcons === "function") {
       window.lucide.createIcons();
     }

@@ -67,6 +67,11 @@
     return legacyValue === true || String(legacyValue || "").toLowerCase() === "true";
   }
 
+  function hasLegacyObserverFlag(user) {
+    const legacyValue = user?.customFields?.isobserver?.value ?? user?.customFields?.isObserver?.value;
+    return legacyValue === true || String(legacyValue || "").toLowerCase() === "true";
+  }
+
   function isAdminUser(user) {
     return !!(user?.isAdmin || hasLegacyAdminFlag(user));
   }
@@ -75,13 +80,25 @@
     return !!user?.isDeveloper;
   }
 
-  function isPrivilegedUser(user = state.currentUserData) {
+  function isObserverUser(user) {
+    return !!(user?.isObserver || hasLegacyObserverFlag(user) || String(user?.userType || "").trim().toLowerCase() === "observador");
+  }
+
+  function hasManagementAccess(user = state.currentUserData) {
+    return isAdminUser(user) || isDeveloperUser(user) || isObserverUser(user);
+  }
+
+  function canManagePrivilegedNavigation(user = state.currentUserData) {
     return isAdminUser(user) || isDeveloperUser(user);
+  }
+
+  function canExportReports(user = state.currentUserData) {
+    return hasManagementAccess(user);
   }
 
   function updateAdminNavigation() {
     document.querySelectorAll('[data-admin-only-nav="designated"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isPrivilegedUser());
+      element.classList.toggle("hidden-state", !canManagePrivilegedNavigation());
     });
     document.querySelectorAll('[data-developer-only-nav="control-center"]').forEach((element) => {
       element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
@@ -373,26 +390,32 @@
   }
 
   async function registerReportHistory(currentCount, lateCount) {
+    if (!canExportReports()) return;
     if (!state.currentUser || !state.currentUserData) return;
     const sectorLabel = state.filters.sector || "Todos os setores";
     const exportedAt = new Date();
-    await db.collection("reportsHistory").add({
-      generatedById: state.currentUser.uid,
-      generatedByName: state.currentUserData.name || state.currentUser.email || "Usuario",
-      generatedByEmail: state.currentUser.email || state.currentUserData.email || "",
-      exportType: "CSV",
-      periodLabel: getPeriodLabel(),
-      sectorLabel,
-      totalCurrent: currentCount,
-      totalLate: lateCount,
-      exportedDate: exportedAt.toLocaleDateString("pt-BR"),
-      exportedTime: exportedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      exportedAtMs: exportedAt.getTime(),
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    try {
+      await db.collection("reportsHistory").add({
+        generatedById: state.currentUser.uid,
+        generatedByName: state.currentUserData.name || state.currentUser.email || "Usuario",
+        generatedByEmail: state.currentUser.email || state.currentUserData.email || "",
+        exportType: "CSV",
+        periodLabel: getPeriodLabel(),
+        sectorLabel,
+        totalCurrent: currentCount,
+        totalLate: lateCount,
+        exportedDate: exportedAt.toLocaleDateString("pt-BR"),
+        exportedTime: exportedAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+        exportedAtMs: exportedAt.getTime(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch (error) {
+      console.warn("Nao foi possivel registrar o historico de relatorios.", error);
+    }
   }
 
   function exportCsv() {
+    if (!canExportReports()) return;
     const rows = getFilteredRids();
     const lateRows = getLateRids();
     const lines = [
@@ -501,6 +524,8 @@
     dom.pageShell.classList.remove("hidden-state");
     updateAdminNavigation();
     dom.welcomeText.textContent = `Bem-vindo, ${state.currentUserData?.name || "gestor"}. Aqui voce acompanha os relatorios consolidados de RIDs.`;
+    dom.openReportModalButton.classList.toggle("hidden-state", !canExportReports());
+    dom.downloadCsvButton.classList.toggle("hidden-state", !canExportReports());
     renderPage();
     lucide.createIcons();
   }
@@ -521,6 +546,10 @@
       .limit(30)
       .onSnapshot((snapshot) => {
         state.reportHistory = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        if (state.currentUserData) renderReportHistory();
+      }, (error) => {
+        console.warn("Sem permissao para ler reportsHistory. Seguindo sem historico.", error);
+        state.reportHistory = [];
         if (state.currentUserData) renderReportHistory();
       });
   }
@@ -632,7 +661,7 @@
     const userDoc = await db.collection("users").doc(user.uid).get();
     state.currentUserData = userDoc.exists ? { id: user.uid, ...userDoc.data() } : null;
 
-    if (!isPrivilegedUser()) {
+    if (!hasManagementAccess()) {
       sessionStorage.setItem("ridLoginFeedback", "Sua conta nao tem permissao para este painel.");
       await auth.signOut();
       return;

@@ -15,7 +15,7 @@
   const ANNOUNCEMENTS_COLLECTION = db.collection("globalAnnouncements");
   const RID_FORM_SETTINGS_DOC = db.collection("appSettings").doc("ridFormSchema");
   const messaging = typeof firebase.messaging === "function" ? firebase.messaging() : null;
-  const WEB_PUSH_VAPID_KEY = "BC2FvVfx_PdEvXYqKdMAwZaNetYp_5Ni94FYINhTBxaXZnrhlCFfczJ-ivYtwsErGGcYAIAqUVzRz2HteJSaNuQ";
+  const WEB_PUSH_VAPID_KEY = "BI1bjhLMKixbDQsSZ98G40pFeaYqQnxDShyqYrViqepuybo0U8VtCQcGumv7R6WzaPRoLvkLY_pIK8Q4UGg8mLg";
 
   const STORAGE_KEYS = {
     auth: "ridMobileOfflineAuth",
@@ -1166,6 +1166,45 @@
     return digits.padStart(5, "0");
   }
 
+  function removeRid1000MobileCelebrationModal() {
+    document.getElementById("rid1000MobileCelebrationModal")?.remove();
+  }
+
+  function showRid1000MobileCelebration() {
+    removeRid1000MobileCelebrationModal();
+    const overlay = document.createElement("div");
+    overlay.id = "rid1000MobileCelebrationModal";
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "1600";
+    overlay.style.background = "rgba(255, 255, 255, 0.34)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.padding = "18px";
+    overlay.style.backdropFilter = "blur(16px)";
+    overlay.style.webkitBackdropFilter = "blur(16px)";
+    overlay.innerHTML = `
+      <div style="width:min(100%,820px);position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;">
+        <button type="button" id="closeRid1000MobileCelebrationModal" aria-label="Fechar homenagem do RID 1000" style="position:absolute;top:8px;right:10px;z-index:2;border:none;background:transparent;color:rgba(15,23,42,0.72);font-size:34px;line-height:1;cursor:pointer;padding:0 4px;">x</button>
+        <img src="marco-rid-1000.png" alt="Homenagem ao emissor do RID 1000" style="display:block;width:100%;height:auto;max-height:calc(100dvh - 36px);object-fit:contain;">
+        <div style="max-width:520px;text-align:center;color:#1f2937;padding:0 12px 4px;">
+          <div style="font-size:22px;font-weight:800;line-height:1.2;">🎉 Parabéns pelo RID 1000!</div>
+          <div style="font-size:15px;line-height:1.55;margin-top:8px;">Emitir RIDs é essencial para prevenir acidentes.</div>
+          <div style="font-size:15px;font-weight:700;line-height:1.55;margin-top:2px;">Continue — segurança começa com atitude!</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => {
+      removeRid1000MobileCelebrationModal();
+    };
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close();
+    });
+    overlay.querySelector("#closeRid1000MobileCelebrationModal")?.addEventListener("click", close);
+  }
+
   function canUsePushNotifications() {
     return !!(state.online && state.currentUser?.uid && messaging && "Notification" in window && "serviceWorker" in navigator);
   }
@@ -1753,6 +1792,7 @@
       conclusionDate: isCorrectedNow ? firebase.firestore.FieldValue.serverTimestamp() : null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    return ridNumber;
   }
 
   function savePendingRid(payload) {
@@ -1958,7 +1998,7 @@
         }
 
         setActionOverlay("Enviando RID", "Aguarde enquanto o envio é concluído.");
-        await submitRidToFirestore(payload);
+        const ridNumber = await submitRidToFirestore(payload);
 
         try {
           await cacheRemoteData();
@@ -1966,6 +2006,9 @@
         } catch (cacheError) {
           console.error("RID enviada, mas houve falha ao atualizar o cache local:", cacheError);
           showToast("RID enviada com sucesso, mas o cache do celular nao foi atualizado.", "info");
+        }
+        if (String(ridNumber) === "01000") {
+          showRid1000MobileCelebration();
         }
       } else {
         setActionOverlay("Salvando localmente", "Seu RID está sendo guardado offline.");
@@ -2078,12 +2121,15 @@
       if (useOverlay) {
         setActionOverlay("Sincronizando RID", "Aguarde enquanto o envio é concluído.");
       }
-      await submitRidToFirestore(pending);
+      const ridNumber = await submitRidToFirestore(pending);
       state.pendingRids = state.pendingRids.filter((item) => item.localId !== localId);
       await cacheRemoteData();
       persistUserCache();
       renderApp();
       showToast("RID sincronizada com sucesso.", "success");
+      if (String(ridNumber) === "01000") {
+        showRid1000MobileCelebration();
+      }
     } catch (error) {
       console.error("Erro ao sincronizar RID:", error);
       showToast(`Falha ao sincronizar: ${error.message}`, "error");

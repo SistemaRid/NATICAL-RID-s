@@ -16,7 +16,7 @@
   const db = typeof firebase.firestore === "function" ? firebase.firestore() : null;
   auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
   const DEVELOPER_ONLY_PAGES = new Set(["centro-controle.html", "alteracoes.html", "solicitacoes.html"]);
-  const PRIVILEGED_PAGES = new Set([
+  const ADMIN_ALLOWED_PAGES = new Set([
     "dashboard.html",
     "rids.html",
     "funcionarios.html",
@@ -24,6 +24,13 @@
     "melhorias.html",
     "designados.html",
     "configuracoes.html"
+  ]);
+  const OBSERVER_ALLOWED_PAGES = new Set([
+    "dashboard.html",
+    "rids.html",
+    "meus-rids.html",
+    "funcionarios.html",
+    "relatorios.html"
   ]);
 
   const dom = {
@@ -82,6 +89,17 @@
     );
   }
 
+  function isObserverProfile(profile) {
+    const legacyValue = profile?.customFields?.isobserver?.value ?? profile?.customFields?.isObserver?.value;
+    const userType = String(profile?.userType || "").trim().toLowerCase();
+    return !!(
+      profile?.isObserver === true ||
+      legacyValue === true ||
+      String(legacyValue || "").toLowerCase() === "true" ||
+      userType === "observador"
+    );
+  }
+
   function isAdminProfile(profile) {
     const userType = String(profile?.userType || "").trim().toLowerCase();
     return !!(
@@ -94,7 +112,8 @@
   function canAccessPage(profile, page) {
     if (!profile) return false;
     if (DEVELOPER_ONLY_PAGES.has(page)) return isDeveloperProfile(profile);
-    if (PRIVILEGED_PAGES.has(page)) return isAdminProfile(profile);
+    if (OBSERVER_ALLOWED_PAGES.has(page)) return isAdminProfile(profile) || isObserverProfile(profile);
+    if (ADMIN_ALLOWED_PAGES.has(page)) return isAdminProfile(profile);
     return true;
   }
 

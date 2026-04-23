@@ -71,9 +71,19 @@
     return !!(user?.isAdmin && user?.isDeveloper);
   }
 
+  function isObserverProfile(user = state.currentUserData) {
+    const legacyValue = user?.customFields?.isobserver?.value ?? user?.customFields?.isObserver?.value;
+    return !!(
+      user?.isObserver ||
+      legacyValue === true ||
+      String(legacyValue || "").toLowerCase() === "true" ||
+      String(user?.userType || "").trim().toLowerCase() === "observador"
+    );
+  }
+
   function updateAdminNavigation() {
     document.querySelectorAll('[data-admin-only-nav="designated"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isAdminProfile());
+      element.classList.toggle("hidden-state", !(isAdminProfile() && !isObserverProfile()));
     });
     document.querySelectorAll('[data-developer-only-nav="control-center"]').forEach((element) => {
       element.classList.toggle("hidden-state", !isDeveloperProfile());

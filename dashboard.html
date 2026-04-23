@@ -149,7 +149,8 @@
       justify-content: center;
       text-align: center;
       padding: 0 44px;
-      pointer-events: none;
+      pointer-events: auto;
+      cursor: pointer;
       text-decoration: none;
     }
     .sector-donut-center-value {
@@ -376,6 +377,77 @@
     @keyframes goalCelebrateBar {
       0%, 100% { filter: saturate(1) brightness(1); }
       50% { filter: saturate(1.25) brightness(1.12); }
+    }
+    @keyframes milestoneGoldPulse {
+      0%, 100% {
+        background: linear-gradient(90deg, rgba(255, 251, 235, 0.98), rgba(255, 255, 255, 0.98), rgba(255, 247, 237, 0.98));
+        box-shadow: 0 10px 24px rgba(245, 158, 11, 0.12), 0 0 0 rgba(251, 191, 36, 0);
+        border-color: rgba(253, 186, 116, 0.9);
+        filter: saturate(1) brightness(1);
+        transform: translateY(0) scale(1);
+      }
+      50% {
+        background: linear-gradient(90deg, rgba(255, 236, 179, 0.98), rgba(255, 248, 220, 0.98), rgba(254, 215, 170, 0.98));
+        box-shadow: 0 18px 42px rgba(245, 158, 11, 0.32), 0 0 30px rgba(250, 204, 21, 0.32);
+        border-color: rgba(251, 191, 36, 1);
+        filter: saturate(1.18) brightness(1.06);
+        transform: translateY(-2px) scale(1.012);
+      }
+    }
+    @keyframes milestoneGoldSweep {
+      0% { transform: translateX(-155%) skewX(-22deg); opacity: 0; }
+      12% { opacity: 0.18; }
+      50% { opacity: 0.34; }
+      100% { transform: translateX(220%) skewX(-22deg); opacity: 0; }
+    }
+    .rid-milestone-card {
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
+      will-change: transform, box-shadow, filter, background;
+      animation: milestoneGoldPulse 4.2s ease-in-out infinite;
+    }
+    .rid-milestone-card::before {
+      content: "";
+      position: absolute;
+      inset: -14px;
+      border-radius: 28px;
+      background:
+        radial-gradient(circle at 20% 50%, rgba(251, 191, 36, 0.42), transparent 42%),
+        radial-gradient(circle at 80% 50%, rgba(245, 158, 11, 0.34), transparent 44%),
+        radial-gradient(circle at 50% 0%, rgba(254, 240, 138, 0.32), transparent 46%);
+      filter: blur(16px);
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 0;
+      animation: milestoneGoldAura 3.8s ease-in-out infinite;
+    }
+    .rid-milestone-card::after {
+      content: "";
+      position: absolute;
+      inset: -20% auto -20% -35%;
+      width: 42%;
+      background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,248,220,0.88), rgba(255,255,255,0));
+      mix-blend-mode: screen;
+      pointer-events: none;
+      animation: milestoneGoldSweep 4.8s ease-in-out infinite;
+      z-index: 1;
+    }
+    .rid-milestone-card > * {
+      position: relative;
+      z-index: 2;
+    }
+    @keyframes milestoneGoldAura {
+      0%, 100% {
+        opacity: 0.25;
+        transform: scale(0.985);
+        filter: blur(14px);
+      }
+      50% {
+        opacity: 0.82;
+        transform: scale(1.035);
+        filter: blur(22px);
+      }
     }
     .goal-panel-intro {
       position: relative;
@@ -671,7 +743,7 @@
         </div>
         <div>
           <p class="text-xs uppercase tracking-[0.2em] text-gray-400 font-semibold">Privado</p>
-          <h1 class="text-xl font-bold text-gray-900">NATICAL RID's</h1>
+          <h1 class="text-xl font-bold text-gray-900">Sistema RID's</h1>
         </div>
       </div>
       <p class="text-sm text-gray-500 mb-6">Entre com sua conta de gestao para visualizar os dados do dashboard.</p>
@@ -716,7 +788,7 @@
     <main class="flex-1 overflow-x-hidden overflow-y-auto p-8" style="min-width:0;">
       <header class="dashboard-header animate-in">
         <div>
-          <h1 class="text-2xl font-bold text-gray-900" id="main-title">NATICAL RID's</h1>
+          <h1 class="text-2xl font-bold text-gray-900" id="main-title">Sistema RID's</h1>
           <p class="text-gray-400 mt-1 text-sm" id="welcome-text">Analise em tempo real do fluxo de RIDs</p>
         </div>
         <div class="dashboard-toolbar">
@@ -761,6 +833,8 @@
         <div class="stat-card bg-gray-50 animate-in animate-in-d5"><div class="flex items-center justify-between mb-3"><span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Encerradas</span><div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:#eef2f7;"><i data-lucide="check-check" style="width:14px;height:14px;color:#64748b;"></i></div></div><p id="statClosedRids" class="text-2xl font-bold text-gray-900">-</p><p class="text-[11px] text-gray-400 mt-2">RIDs encerradas no periodo</p></div>
         <div class="stat-card bg-gray-50 animate-in animate-in-d5"><div class="flex items-center justify-between mb-3"><span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Removidas</span><div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:#f3f4f6;"><i data-lucide="archive-x" style="width:14px;height:14px;color:#6b7280;"></i></div></div><p id="statRemovedRids" class="text-2xl font-bold text-gray-900">-</p><p class="text-[11px] text-gray-400 mt-2">RIDs removidas no periodo</p></div>
       </section>
+
+      <section id="ridMilestoneBanner" class="mb-8 hidden-state"></section>
 
       <section class="dashboard-panel-grid mb-8" aria-label="Graficos">
         <div class="border border-gray-100 rounded-2xl p-5 animate-in animate-in-d4"><div class="flex items-center justify-between mb-4"><div><h2 class="font-semibold text-gray-900 text-base">Status dos RIDs</h2><p class="text-xs text-gray-400 mt-1">Distribuicao dos RIDs criados no periodo</p></div></div><div id="statusGoalPanel" class="mb-4"></div><div id="statusBoard" class="space-y-4"></div></div>
@@ -841,9 +915,6 @@
       window.setTimeout(() => footer.classList.remove("visible"), 10000);
     })();
   </script>
-  <script src="user-profile-resolver.js"></script>
   <script src="dashboard-app.js"></script>
-  <script src="rid-notifications.js"></script>
-  <script src="management-login-tracker.js"></script>
 </body>
 </html>

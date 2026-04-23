@@ -80,6 +80,11 @@
     return legacyValue === true || String(legacyValue || "").toLowerCase() === "true";
   }
 
+  function hasLegacyObserverFlag(user) {
+    const legacyValue = user?.customFields?.isobserver?.value ?? user?.customFields?.isObserver?.value;
+    return legacyValue === true || String(legacyValue || "").toLowerCase() === "true";
+  }
+
   function isAdminUser(user) {
     return !!(user?.isAdmin || hasLegacyAdminFlag(user));
   }
@@ -88,13 +93,21 @@
     return !!user?.isDeveloper;
   }
 
-  function isPrivilegedUser(user = state.currentUserData) {
-    return isAdminUser(user) || isDeveloperUser(user);
+  function isObserverUser(user) {
+    return !!(user?.isObserver || hasLegacyObserverFlag(user) || String(user?.userType || "").trim().toLowerCase() === "observador");
+  }
+
+  function hasManagementAccess(user = state.currentUserData) {
+    return isAdminUser(user) || isDeveloperUser(user) || isObserverUser(user);
+  }
+
+  function canEditRids(user = state.currentUserData) {
+    return !isObserverUser(user) && (isAdminUser(user) || isDeveloperUser(user));
   }
 
   function updateAdminNavigation() {
     document.querySelectorAll('[data-admin-only-nav="designated"]').forEach((element) => {
-      element.classList.toggle("hidden-state", !isPrivilegedUser());
+      element.classList.toggle("hidden-state", !canEditRids());
     });
     document.querySelectorAll('[data-developer-only-nav="control-center"]').forEach((element) => {
       element.classList.toggle("hidden-state", !isDeveloperUser(state.currentUserData));
@@ -251,9 +264,109 @@
     });
   }
 
+  function getActorRoleLabel() {
+    if (isDeveloperUser(state.currentUserData)) return "DEVELOPER";
+    if (isAdminUser(state.currentUserData)) return "ADMIN";
+    if (isObserverUser(state.currentUserData)) return "OBSERVER";
+    return "USER";
+  }
+
+  function auditNormalizeValue(value) {
+    if (value === undefined) return null;
+    if (value === null) return null;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value?.toDate === "function") return value.toDate().toISOString();
+    if (typeof value?.seconds === "number") return new Date(value.seconds * 1000).toISOString();
+    if (Array.isArray(value)) return value.map(auditNormalizeValue);
+    if (typeof value === "object") {
+      const normalized = {};
+      Object.entries(value).forEach(([key, entry]) => {
+        normalized[key] = auditNormalizeValue(entry);
+      });
+      return normalized;
+    }
+    return value;
+  }
+
+  function getRidAuditSnapshot(rid = {}) {
+    return {
+      ridNumber: rid.ridNumber || null,
+      emitterName: rid.emitterName || null,
+      emitterCpf: rid.emitterCpf || null,
+      contractType: rid.contractType || null,
+      unit: rid.unit || null,
+      sector: rid.sector || null,
+      emissionDate: auditNormalizeValue(rid.emissionDate || null),
+      incidentType: rid.incidentType || null,
+      detectionOrigin: rid.detectionOrigin || null,
+      location: rid.location || null,
+      description: rid.description || null,
+      riskClassification: rid.riskClassification || null,
+      immediateAction: rid.immediateAction || null,
+      responsibleLeader: rid.responsibleLeader || null,
+      responsibleLeaderName: rid.responsibleLeaderName || null,
+      status: rid.status || null,
+      deadline: auditNormalizeValue(rid.deadline || null),
+      correctiveActions: rid.correctiveActions || null,
+      observations: rid.observations || null,
+      conclusion: rid.conclusion || null,
+      conclusionDate: auditNormalizeValue(rid.conclusionDate || null),
+      deleted: !!rid.deleted,
+      deletedAt: auditNormalizeValue(rid.deletedAt || null),
+      deletedBy: auditNormalizeValue(rid.deletedBy || null),
+      deleteReason: rid.deleteReason || null
+    };
+  }
+
+  function auditValuesEqual(left, right) {
+    return JSON.stringify(auditNormalizeValue(left)) === JSON.stringify(auditNormalizeValue(right));
+  }
+
+  function buildRidAuditChanges(beforeSnapshot = {}, afterSnapshot = {}) {
+    const keys = new Set([...Object.keys(beforeSnapshot), ...Object.keys(afterSnapshot)]);
+    const changes = {};
+    keys.forEach((key) => {
+      const from = beforeSnapshot[key] ?? null;
+      const to = afterSnapshot[key] ?? null;
+      if (auditValuesEqual(from, to)) return;
+      changes[key] = { from, to };
+    });
+    return changes;
+  }
+
+  async function recordRidHistory({ rid, before = null, after = null, action = "RID_UPDATED", meta = {} }) {
+    if (!rid?.id || !state.currentUser?.uid) return;
+
+    const beforeSnapshot = before ? getRidAuditSnapshot(before) : {};
+    const afterSnapshot = after ? getRidAuditSnapshot(after) : {};
+    const changes = buildRidAuditChanges(beforeSnapshot, afterSnapshot);
+
+    await db.collection("ridHistory").add({
+      ridId: rid.id,
+      ridNumber: rid.ridNumber || afterSnapshot.ridNumber || beforeSnapshot.ridNumber || null,
+      emitterName: rid.emitterName || afterSnapshot.emitterName || beforeSnapshot.emitterName || null,
+      leaderName: afterSnapshot.responsibleLeaderName || beforeSnapshot.responsibleLeaderName || null,
+      action,
+      changedBy: {
+        uid: state.currentUser.uid,
+        name: state.currentUserData?.name || state.currentUser.email || "Usuario",
+        email: state.currentUser.email || "",
+        role: getActorRoleLabel()
+      },
+      changes,
+      before: beforeSnapshot,
+      after: afterSnapshot,
+      meta: {
+        ...meta,
+        sourcePage: "rids.html"
+      },
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+
   function getLeaderOptions() {
     return state.allUsers
-      .filter((user) => user && isPrivilegedUser(user))
+      .filter((user) => user && canEditRids(user))
       .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"));
   }
 
@@ -273,6 +386,10 @@
   function openRidDetailsModal(ridId) {
     const rid = findRidById(ridId);
     if (!rid) return;
+    const isReadOnly = isObserverUser(state.currentUserData);
+    const readOnlyFieldClass = isReadOnly
+      ? "bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed focus:outline-none"
+      : "bg-white text-gray-700 border-gray-200 focus:outline-none focus:border-gray-400";
     state.selectedRidId = ridId;
     const status = getStatusMeta(rid.status);
     const leaders = getLeaderOptions();
@@ -287,13 +404,18 @@
       dom.ridDetailsDeleteAction.textContent = "Excluir";
       dom.ridDetailsDeleteAction.className = "px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-semibold";
       dom.ridDetailsDeleteAction.classList.remove("hidden-state");
-    } else if (isAdminUser(state.currentUserData)) {
+    } else if (!isReadOnly && isAdminUser(state.currentUserData)) {
       dom.ridDetailsDeleteAction.textContent = "Solicitar remocao";
       dom.ridDetailsDeleteAction.className = "px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-sm font-semibold";
       dom.ridDetailsDeleteAction.classList.remove("hidden-state");
     }
 
     dom.ridDetailsBody.innerHTML = `
+      ${isReadOnly ? `
+        <div class="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+          Perfil observador: visualizacao somente leitura para este RID.
+        </div>
+      ` : ""}
       <div class="flex items-center gap-2 flex-wrap mb-5">
         <span class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${status.tone}">${status.label}</span>
         <span class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">${escapeHtml(rid.sector || "Sem setor")}</span>
@@ -359,7 +481,7 @@
         </div>
         <div class="rounded-2xl border border-gray-100 bg-white px-4 py-4">
           <label class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 block">Lider designado</label>
-          <select id="ridLeaderSelect" class="w-full mt-2 px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-white">
+          <select id="ridLeaderSelect" class="w-full mt-2 px-4 py-3 rounded-xl border text-sm ${readOnlyFieldClass}" ${isReadOnly ? "disabled" : ""}>
             <option value="">Sem lider designado</option>
             ${leaders.map((leader) => `
               <option value="${escapeHtml(leader.id)}" ${leader.id === rid.responsibleLeader ? "selected" : ""}>${escapeHtml(leader.name || "Sem nome")}</option>
@@ -368,7 +490,7 @@
         </div>
         <div class="rounded-2xl border border-gray-100 bg-white px-4 py-4">
           <label class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 block">Status</label>
-          <select id="ridStatusSelect" class="w-full mt-2 px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-white">
+          <select id="ridStatusSelect" class="w-full mt-2 px-4 py-3 rounded-xl border text-sm ${readOnlyFieldClass}" ${isReadOnly ? "disabled" : ""}>
             ${["EM ANDAMENTO", "VENCIDO", "CORRIGIDO", "ENCERRADO"].map((option) => `
               <option value="${option}" ${normalizeStatus(rid.status) === option ? "selected" : ""}>${option}</option>
             `).join("")}
@@ -376,22 +498,23 @@
         </div>
         <div class="rounded-2xl border border-gray-100 bg-white px-4 py-4">
           <label class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 block">Prazo (Opcional)</label>
-          <input id="ridDeadlineInput" type="date" value="${escapeHtml(toDateInputValue(rid.deadline))}" class="w-full mt-2 px-4 py-3 rounded-xl border border-gray-200 text-sm bg-white text-gray-700 focus:outline-none focus:border-gray-400">
+          <input id="ridDeadlineInput" type="date" value="${escapeHtml(toDateInputValue(rid.deadline))}" class="w-full mt-2 px-4 py-3 rounded-xl border text-sm ${readOnlyFieldClass}" ${isReadOnly ? "disabled" : ""}>
         </div>
         <div class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 md:col-span-2">
           <label class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 block">Observacoes</label>
-          <textarea readonly rows="4" class="w-full mt-2 px-4 py-3 rounded-xl border border-gray-200 text-sm bg-gray-100 text-gray-600 resize-none">${escapeHtml(rid.observations || "")}</textarea>
+          <textarea readonly tabindex="-1" rows="4" class="w-full mt-2 px-4 py-3 rounded-xl border border-gray-200 text-sm bg-gray-100 text-gray-600 resize-none cursor-default">${escapeHtml(rid.observations || "")}</textarea>
         </div>
         <div class="rounded-2xl border border-gray-100 bg-white px-4 py-4 md:col-span-2">
           <label class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 block">Acoes corretivas</label>
-          <textarea id="ridCorrectiveActionsInput" rows="4" class="w-full mt-2 px-4 py-3 rounded-xl border border-gray-200 text-sm bg-white text-gray-700 resize-none focus:outline-none focus:border-gray-400">${escapeHtml(rid.correctiveActions || "")}</textarea>
+          <textarea id="ridCorrectiveActionsInput" rows="4" tabindex="${isReadOnly ? "-1" : "0"}" class="w-full mt-2 px-4 py-3 rounded-xl border text-sm resize-none ${readOnlyFieldClass}" ${isReadOnly ? "readonly" : ""}>${escapeHtml(rid.correctiveActions || "")}</textarea>
         </div>
         <div class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 md:col-span-2">
           <label class="text-[11px] uppercase tracking-wider font-semibold text-gray-400 block">Conclusao</label>
-          <textarea readonly rows="4" class="w-full mt-2 px-4 py-3 rounded-xl border border-gray-200 text-sm bg-gray-100 text-gray-600 resize-none">${escapeHtml(rid.conclusion || "")}</textarea>
+          <textarea readonly tabindex="-1" rows="4" class="w-full mt-2 px-4 py-3 rounded-xl border border-gray-200 text-sm bg-gray-100 text-gray-600 resize-none cursor-default">${escapeHtml(rid.conclusion || "")}</textarea>
         </div>
       </div>
     `;
+    dom.ridDetailsSave.classList.toggle("hidden-state", isReadOnly);
     dom.ridDetailsModal.classList.add("visible");
   }
 
@@ -448,6 +571,17 @@
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
+    await recordRidHistory({
+      rid,
+      before: rid,
+      after: rid,
+      action: "RID_REMOVAL_REQUESTED",
+      meta: {
+        reason: reason.trim(),
+        requestStatus: "pending"
+      }
+    });
+
     const developerUsers = state.allUsers.filter((user) => user?.isDeveloper);
     for (const dev of developerUsers) {
       try {
@@ -467,8 +601,7 @@
   async function deleteRidDirectlyFromModal(rid) {
     const previousObs = rid.observations || "";
     const deleteNote = `[${new Date().toLocaleDateString("pt-BR")}] RID removido do sistema\nMotivo: Exclusao direta pelo desenvolvedor\nRemovido por: ${state.currentUserData?.name || "DEV"}`;
-
-    await db.collection("rids").doc(rid.id).update({
+    const updates = {
       deleted: true,
       status: "EXCLUIDO",
       deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -479,6 +612,17 @@
       },
       deleteReason: "Exclusao direta pelo desenvolvedor",
       observations: previousObs ? `${previousObs}\n\n${deleteNote}` : deleteNote
+    };
+
+    await db.collection("rids").doc(rid.id).update(updates);
+    await recordRidHistory({
+      rid,
+      before: rid,
+      after: { ...rid, ...updates },
+      action: "RID_DELETED",
+      meta: {
+        reason: "Exclusao direta pelo desenvolvedor"
+      }
     });
 
     const adminUsers = state.allUsers.filter((user) => isAdminUser(user) && user.id !== state.currentUser.uid);
@@ -498,6 +642,7 @@
   }
 
   async function saveRidDetails() {
+    if (!canEditRids()) return;
     const ridId = state.selectedRidId;
     const rid = findRidById(ridId);
     if (!rid) return;
@@ -544,6 +689,12 @@
 
     try {
       await db.collection("rids").doc(ridId).update(updates);
+      await recordRidHistory({
+        rid,
+        before: rid,
+        after: { ...rid, ...updates },
+        action: "RID_UPDATED"
+      });
       closeRidDetailsModal();
     } catch (error) {
       dom.ridDetailsFeedback.textContent = "Nao foi possivel salvar as alteracoes do RID.";
@@ -732,7 +883,7 @@
     if (typeof state.unsubRids === "function") state.unsubRids();
     state.unsubRids = db.collection("rids").onSnapshot((snapshot) => {
       state.allRids = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      if (isPrivilegedUser() && !isEditingRidModal()) renderRidsPage();
+      if (hasManagementAccess() && !isEditingRidModal()) renderRidsPage();
     });
   }
 
@@ -810,7 +961,7 @@
       if (!rid) return;
       if (isDeveloperUser(state.currentUserData)) {
         openRidDeleteConfirmModal(rid.id);
-      } else if (isAdminUser(state.currentUserData)) {
+      } else if (canEditRids() && isAdminUser(state.currentUserData)) {
         openRidRemovalRequestModal(rid.id);
       }
     });
@@ -906,7 +1057,7 @@
     const userDoc = await db.collection("users").doc(user.uid).get();
     state.currentUserData = userDoc.exists ? { id: user.uid, ...userDoc.data() } : null;
 
-    if (!state.currentUserData || !isPrivilegedUser()) {
+    if (!state.currentUserData || !hasManagementAccess()) {
       sessionStorage.setItem("ridLoginFeedback", "Sua conta nao tem permissao para este painel.");
       await auth.signOut();
       return;
