@@ -461,13 +461,32 @@
     ).trim();
     if (thirdPartyCompany) return "TERCEIRO";
 
-    const raw = String(
-      employee?.employmentType ||
-      employee?.customFields?.employmentType?.value ||
-      employee?.customFields?.categoria?.value ||
-      ""
-    ).trim().toUpperCase();
-    return raw === "TERCEIRO" ? "TERCEIRO" : "FUNCIONARIO";
+    const rawValues = [
+      employee?.employmentType,
+      employee?.userType,
+      employee?.type,
+      employee?.tipo,
+      employee?.customFields?.employmentType?.value,
+      employee?.customFields?.categoria?.value,
+      employee?.customFields?.type?.value,
+      employee?.customFields?.tipo?.value,
+      employee?.customFields?.tipovinculo?.value,
+      employee?.customFields?.tipousuario?.value
+    ];
+
+    const normalizedValues = rawValues
+      .map((value) => String(value || "").trim().toUpperCase())
+      .filter(Boolean);
+
+    const isThirdParty = normalizedValues.some((value) =>
+      value === "TERCEIRO" ||
+      value.includes("TERCEIRO CONTRATADO") ||
+      value.includes("TERCEIRO EVENTUAL") ||
+      value.includes("VISITANTE") ||
+      value.includes("VISITANTES")
+    );
+
+    return isThirdParty ? "TERCEIRO" : "FUNCIONARIO";
   }
 
   function isThirdPartyEmployee(employee) {
