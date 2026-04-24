@@ -16,7 +16,7 @@
   auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
   const db = firebase.firestore();
   const messaging = typeof firebase.messaging === "function" ? firebase.messaging() : null;
-  const WEB_PUSH_VAPID_KEY = "BC2FvVfx_PdEvXYqKdMAwZaNetYp_5Ni94FYINhTBxaXZnrhlCFfczJ-ivYtwsErGGcYAIAqUVzRz2HteJSaNuQ";
+  const WEB_PUSH_VAPID_KEY = "BI1bjhLMKixbDQsSZ98G40pFeaYqQnxDShyqYrViqepuybo0U8VtCQcGumv7R6WzaPRoLvkLY_pIK8Q4UGg8mLg";
   const ANNOUNCEMENTS_COLLECTION = db.collection("globalAnnouncements");
 
   const state = {
