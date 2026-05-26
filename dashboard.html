@@ -229,6 +229,79 @@
       padding: 12px 14px;
       background: #fbfdff;
     }
+    .sector-goal-layout {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) 280px;
+      gap: 28px;
+      align-items: stretch;
+      min-height: 430px;
+    }
+    .sector-goal-main,
+    .sector-goal-side {
+      min-height: 430px;
+    }
+    .sector-goal-main {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .sector-goal-hero {
+      border: 1px solid #eef2f7;
+      border-radius: 22px;
+      padding: 20px;
+      background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
+    }
+    .sector-goal-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .sector-goal-metric {
+      border-radius: 18px;
+      background: #fff;
+      border: 1px solid #eef2f7;
+      padding: 14px;
+    }
+    .sector-goal-chart {
+      border: 1px solid #eef2f7;
+      border-radius: 22px;
+      background: #fff;
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+      flex: 1;
+    }
+    .sector-goal-row {
+      display: grid;
+      grid-template-columns: 90px minmax(0, 1fr) 64px;
+      gap: 12px;
+      align-items: center;
+    }
+    .sector-goal-track {
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #eef2f7;
+      position: relative;
+    }
+    .sector-goal-fill {
+      height: 100%;
+      border-radius: 999px;
+    }
+    .sector-goal-side {
+      width: 280px;
+      justify-self: end;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .sector-goal-side-card {
+      border: 1px solid #eef2f7;
+      border-radius: 18px;
+      padding: 14px 16px;
+      background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
+    }
     .auth-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.95); display: none; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
     .auth-overlay.visible { display: flex; }
     .auth-card { width: min(100%, 420px); border: 1px solid #e5e7eb; border-radius: 24px; padding: 28px; background: #fff; box-shadow: 0 16px 48px rgba(15,23,42,0.08); }
@@ -578,6 +651,12 @@
       .sector-layout { grid-template-columns: 1fr; }
       .sector-main { width: 100%; }
       .sector-side { justify-self: stretch; width: 100%; }
+      .sector-goal-layout { grid-template-columns: 1fr; min-height: 0; }
+      .sector-goal-main,
+      .sector-goal-side { min-height: 0; width: 100%; }
+      .sector-goal-side { justify-self: stretch; }
+      .sector-goal-metrics { grid-template-columns: 1fr; }
+      .sector-goal-row { grid-template-columns: 78px minmax(0, 1fr) 56px; }
       .sector-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
       .sector-legend-item,
       .sector-legend-item:nth-child(4),
@@ -838,7 +917,7 @@
 
       <section class="dashboard-panel-grid mb-8" aria-label="Graficos">
         <div class="border border-gray-100 rounded-2xl p-5 animate-in animate-in-d4"><div class="flex items-center justify-between mb-4"><div><h2 class="font-semibold text-gray-900 text-base">Status dos RIDs</h2><p class="text-xs text-gray-400 mt-1">Distribuicao dos RIDs criados no periodo</p></div></div><div id="statusGoalPanel" class="mb-4"></div><div id="statusBoard" class="space-y-4"></div></div>
-        <div class="border border-gray-100 rounded-2xl p-5 animate-in animate-in-d5"><div class="flex items-center justify-between mb-4"><div><h2 class="font-semibold text-gray-900 text-base">Setores com mais RIDs</h2><p class="text-xs text-gray-400 mt-1">Distribuicao dos setores com maior volume no recorte</p></div></div><div id="sectorBoard"></div></div>
+        <div class="border border-gray-100 rounded-2xl p-5 animate-in animate-in-d5"><div class="flex items-center justify-between gap-3 mb-4"><div><h2 id="sectorBoardTitle" class="font-semibold text-gray-900 text-base">Setores com mais RIDs</h2><p id="sectorBoardSubtitle" class="text-xs text-gray-400 mt-1">Distribuicao dos setores com maior volume no recorte</p></div><button type="button" id="toggleSectorBoardMode" class="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">Ver metas</button></div><div id="sectorBoard"></div></div>
       </section>
 
       <section class="dashboard-panel-grid mb-8">

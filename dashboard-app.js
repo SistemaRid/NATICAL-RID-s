@@ -33,6 +33,7 @@
     monthlyGoalMeta: null,
     manualGoalValue: null,
     manualGoalMonthKey: null,
+    sectorBoardMode: "volume",
     shouldAnimateGoalIntro: false,
     hasLoadedRidsOnce: false,
     notificationAudio: null,
@@ -72,6 +73,9 @@
     ridMilestoneBanner: document.getElementById("ridMilestoneBanner"),
     statusGoalPanel: document.getElementById("statusGoalPanel"),
     statusBoard: document.getElementById("statusBoard"),
+    sectorBoardTitle: document.getElementById("sectorBoardTitle"),
+    sectorBoardSubtitle: document.getElementById("sectorBoardSubtitle"),
+    toggleSectorBoardMode: document.getElementById("toggleSectorBoardMode"),
     sectorBoard: document.getElementById("sectorBoard"),
     topEmittersList: document.getElementById("topEmittersList"),
     topEmittersSummary: document.getElementById("topEmittersSummary"),
@@ -755,6 +759,26 @@
       : baseName;
   }
 
+  function resolveRidEmitterUser(rid) {
+    return state.allUsers.find((user) => {
+      if (!user) return false;
+
+      const sameId = rid?.emitterId && user.id && rid.emitterId === user.id;
+      const sameCpf = rid?.emitterCpf && user.cpf && String(rid.emitterCpf) === String(user.cpf);
+      const sameName = rid?.emitterName && user.name && String(rid.emitterName).trim() === String(user.name).trim();
+
+      return sameId || sameCpf || sameName;
+    }) || null;
+  }
+
+  function isEligibleTopEmitterUser(user) {
+    if (!user) return false;
+    if (isThirdPartyUser(user)) return false;
+    if (isAdminUser(user)) return false;
+    if (isDeveloperUser(user)) return false;
+    return true;
+  }
+
   function clampDate(date, min, max) {
     if (date < min) return min;
     if (date > max) return max;
@@ -777,6 +801,55 @@
       if (sector && user.sector !== sector) return false;
       if (isThirdPartyUser(user)) return false;
       return true;
+    });
+  }
+
+  function getSectorGoalMetrics(period) {
+    const sectorSet = new Set();
+
+    state.allUsers.forEach((user) => {
+      if (!user || isThirdPartyUser(user)) return;
+      const sector = String(user.sector || "").trim();
+      if (!sector) return;
+      if (period.sector && sector !== period.sector) return;
+      sectorSet.add(sector);
+    });
+
+    state.allRids.forEach((rid) => {
+      if (!rid || rid.deleted || isVisitorRid(rid)) return;
+      const sector = getSectorNameForBoard(rid);
+      if (!sector) return;
+      if (period.sector && sector !== period.sector) return;
+      sectorSet.add(sector);
+    });
+
+    return Array.from(sectorSet).map((sector) => {
+      const users = getGoalUsersForContext(state.allUsers, sector);
+      const goalMeta = period.showAllMonths
+        ? null
+        : calcAutoMonthlyGoal(users, period.year, period.month);
+      const achieved = state.allRids
+        .filter((rid) => !rid.deleted)
+        .filter((rid) => !isVisitorRid(rid))
+        .filter((rid) => getSectorNameForBoard(rid) === sector)
+        .filter((rid) => matchesSelectedPeriod(toDateSafe(rid.emissionDate) || toDateSafe(rid.createdAt), period))
+        .length;
+      const goal = goalMeta?.goal ?? null;
+      const percent = goal && goal > 0 ? Math.min((achieved / goal) * 100, 999) : 0;
+      const remaining = goal && goal > 0 ? Math.max(goal - achieved, 0) : null;
+
+      return {
+        sector,
+        goal,
+        achieved,
+        percent,
+        remaining,
+        usersCount: users.length
+      };
+    }).sort((a, b) => {
+      if ((b.percent || 0) !== (a.percent || 0)) return (b.percent || 0) - (a.percent || 0);
+      if ((b.achieved || 0) !== (a.achieved || 0)) return (b.achieved || 0) - (a.achieved || 0);
+      return String(a.sector || "").localeCompare(String(b.sector || ""), "pt-BR");
     });
   }
 
@@ -972,6 +1045,7 @@
           .filter((rid) => !rid.deleted)
           .filter((rid) => !isVisitorRid(rid))
           .filter((rid) => !period.sector || rid.sector === period.sector)
+          .filter((rid) => isEligibleTopEmitterUser(resolveRidEmitterUser(rid)))
           .filter((rid) => {
             const ridDate = toDateSafe(rid.emissionDate) || toDateSafe(rid.createdAt);
             return ridDate && ridDate.getMonth() + 1 === month && ridDate.getFullYear() === year;
@@ -1077,11 +1151,13 @@
     ];
 
     const emittersMap = {};
-    filteredRids.forEach((rid) => {
+    filteredRids
+      .filter((rid) => isEligibleTopEmitterUser(resolveRidEmitterUser(rid)))
+      .forEach((rid) => {
       const key = rid.emitterId || rid.emitterName || rid.id;
       if (!emittersMap[key]) emittersMap[key] = { name: rid.emitterName || "Sem nome", count: 0 };
       emittersMap[key].count += 1;
-    });
+      });
 
     const topEmitters = Object.values(emittersMap).sort((a, b) => b.count - a.count).slice(0, 5);
     const topEmitterStreaks = getTopEmitterStreaks(topEmitters, period);
@@ -1095,6 +1171,7 @@
     const sectors = Object.entries(sectorMap)
       .map(([sector, count]) => ({ sector, count }))
       .sort((a, b) => b.count - a.count);
+    const sectorGoals = getSectorGoalMetrics(period);
 
     return {
       period,
@@ -1113,6 +1190,7 @@
         streak: topEmitterStreaks.get(item.name) || 0
       })),
       sectors,
+      sectorGoals,
       ridMilestone,
       deleteRequests: getFilteredDeleteRequests(period),
       employeesWithoutRids: getEmployeesWithoutRids(period, filteredRids),
@@ -1590,7 +1668,22 @@
     `;
   }
 
-  function renderSectorBoard(items) {
+  function updateSectorBoardHeader(mode) {
+    if (!dom.sectorBoardTitle || !dom.sectorBoardSubtitle || !dom.toggleSectorBoardMode) return;
+
+    if (mode === "goals") {
+      dom.sectorBoardTitle.textContent = "Metas mensais por setor";
+      dom.sectorBoardSubtitle.textContent = "Meta, percentual de atingimento e saldo restante por setor";
+      dom.toggleSectorBoardMode.textContent = "Ver volume";
+      return;
+    }
+
+    dom.sectorBoardTitle.textContent = "Setores com mais RIDs";
+    dom.sectorBoardSubtitle.textContent = "Distribuicao dos setores com maior volume no recorte";
+    dom.toggleSectorBoardMode.textContent = "Ver metas";
+  }
+
+  function renderSectorVolumeBoard(items) {
     if (!items.length) {
       dom.sectorBoard.innerHTML = '<div class="text-sm text-gray-400">Nenhum setor encontrado para esse recorte.</div>';
       return;
@@ -1694,6 +1787,140 @@
     `;
 
     bindSectorBoardInteractions(segments, total);
+  }
+
+  function renderSectorGoalBoard(items, period) {
+    if (period.showAllMonths) {
+      dom.sectorBoard.innerHTML = `
+        <div class="sector-goal-layout">
+          <div class="sector-goal-main">
+            <div class="sector-goal-hero">
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-amber-500">Visao mensal</div>
+              <div class="text-2xl font-bold text-gray-900 mt-2">Selecione um mes especifico</div>
+              <div class="text-sm text-gray-500 mt-2">A meta por setor e mensal, entao essa visao fica disponivel apenas quando um mes estiver selecionado.</div>
+            </div>
+            <div class="sector-goal-chart">
+              <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+                <div class="text-sm font-semibold text-amber-800">Filtro necessario</div>
+                <div class="text-xs text-amber-700 mt-1">Escolha um mes no dashboard para comparar as metas dos setores no mesmo tamanho de card.</div>
+              </div>
+            </div>
+          </div>
+          <div class="sector-goal-side">
+            <div class="sector-goal-side-card">
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Meta por setor</div>
+              <div class="text-sm text-gray-600 mt-2">Aqui vamos comparar meta, atingimento e saldo restante sem alterar a altura do card.</div>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    if (!items.length) {
+      dom.sectorBoard.innerHTML = '<div class="text-sm text-gray-400">Nenhum setor encontrado para esse recorte.</div>';
+      return;
+    }
+
+    const visibleItems = items.slice(0, 6);
+    const bestItem = visibleItems[0] || null;
+    const totalGoal = visibleItems.reduce((sum, item) => sum + (item.goal || 0), 0);
+    const totalAchieved = visibleItems.reduce((sum, item) => sum + (item.achieved || 0), 0);
+    const totalRemaining = visibleItems.reduce((sum, item) => sum + (item.remaining || 0), 0);
+    const averagePercent = visibleItems.length
+      ? visibleItems.reduce((sum, item) => sum + (item.percent || 0), 0) / visibleItems.length
+      : 0;
+
+    dom.sectorBoard.innerHTML = `
+      <div class="sector-goal-layout">
+        <div class="sector-goal-main">
+          <div class="sector-goal-hero">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-sky-500">Radar de metas</div>
+            <div class="flex items-end justify-between gap-4 mt-2">
+              <div>
+                <div class="text-3xl font-bold text-gray-900">${averagePercent.toFixed(0)}%</div>
+                <div class="text-sm text-gray-500 mt-1">media de atingimento dos setores exibidos</div>
+              </div>
+              <div class="text-right">
+                <div class="text-sm font-semibold text-gray-900">${visibleItems.length}</div>
+                <div class="text-[11px] uppercase tracking-wider text-gray-400">setores no grafico</div>
+              </div>
+            </div>
+            <div class="sector-goal-metrics">
+              <div class="sector-goal-metric">
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Meta total</div>
+                <div class="text-xl font-bold text-gray-900 mt-1">${totalGoal}</div>
+              </div>
+              <div class="sector-goal-metric">
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Emitidos</div>
+                <div class="text-xl font-bold text-gray-900 mt-1">${totalAchieved}</div>
+              </div>
+              <div class="sector-goal-metric">
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Faltando</div>
+                <div class="text-xl font-bold text-gray-900 mt-1">${totalRemaining}</div>
+              </div>
+            </div>
+          </div>
+          <div class="sector-goal-chart">
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Atingimento por setor</div>
+              <div class="text-[11px] text-gray-400">Porcentagem</div>
+            </div>
+            ${visibleItems.map((item) => {
+              const safePercent = Math.max(item.percent || 0, 0);
+              const barPercent = Math.min(safePercent, 100);
+              const progressTone = safePercent >= 100 ? "#16a34a" : safePercent >= 75 ? "#2563eb" : safePercent >= 50 ? "#d97706" : "#dc2626";
+              return `
+                <div class="sector-goal-row">
+                  <div class="min-w-0">
+                    <div class="text-xs font-semibold text-gray-900 truncate">${escapeHtml(item.sector)}</div>
+                    <div class="text-[10px] text-gray-400">${item.achieved}/${item.goal ?? 0}</div>
+                  </div>
+                  <div class="sector-goal-track">
+                    <div class="sector-goal-fill" style="width:${barPercent}%;background:${progressTone};"></div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-xs font-bold" style="color:${progressTone};">${safePercent.toFixed(0)}%</div>
+                    <div class="text-[10px] text-gray-400">${item.remaining === 0 ? "ok" : `-${item.remaining ?? 0}`}</div>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+        <div class="sector-goal-side">
+          <div class="sector-goal-side-card">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Melhor resultado</div>
+            <div class="text-lg font-bold text-gray-900 mt-2">${escapeHtml(bestItem?.sector || "-")}</div>
+            <div class="text-sm text-gray-500 mt-1">${bestItem ? `${bestItem.percent.toFixed(0)}% da meta atingida` : "Sem dados no periodo"}</div>
+          </div>
+          <div class="sector-goal-side-card">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Leitura rapida</div>
+            <div class="text-sm text-gray-600 mt-2">
+              ${bestItem
+                ? `${escapeHtml(bestItem.sector)} lidera no recorte com ${bestItem.achieved} RIDs emitidos, meta de ${bestItem.goal ?? 0} e saldo restante de ${bestItem.remaining ?? 0}.`
+                : "Sem dados suficientes para gerar insight."}
+            </div>
+          </div>
+          <div class="sector-goal-side-card">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Base da meta</div>
+            <div class="text-sm text-gray-600 mt-2">A meta continua usando o calculo automatico mensal do sistema por setor.</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderSectorBoard(data, period) {
+    const mode = state.sectorBoardMode === "goals" ? "goals" : "volume";
+    updateSectorBoardHeader(mode);
+
+    if (mode === "goals") {
+      renderSectorGoalBoard(data?.sectorGoals || [], period);
+      return;
+    }
+
+    renderSectorVolumeBoard(data?.sectors || []);
   }
 
   function bindSectorBoardInteractions(segments, total) {
@@ -1879,7 +2106,7 @@
     renderRidMilestoneBanner(data.ridMilestone);
     renderGoalPanel(data);
     renderStatusBoard(data.statusItems);
-    renderSectorBoard(data.sectors);
+    renderSectorBoard(data, data.period);
     renderTopEmitters(data.topEmitters);
     renderEmployeesWithoutRids(data.employeeRidCountsCurrentMonth);
     renderDeleteRequestsBoard(data.deleteRequests);
@@ -1986,6 +2213,11 @@
     dom.clearFiltersButton.addEventListener("click", () => {
       resetFiltersToCurrentMonth();
       closeFiltersPanel();
+      void renderDashboard();
+    });
+
+    dom.toggleSectorBoardMode?.addEventListener("click", () => {
+      state.sectorBoardMode = state.sectorBoardMode === "goals" ? "volume" : "goals";
       void renderDashboard();
     });
 
