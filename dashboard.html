@@ -302,6 +302,39 @@
       padding: 14px 16px;
       background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
     }
+    .sector-average-layout {
+      min-height: 0;
+      gap: 20px;
+      align-items: start;
+    }
+    .sector-average-layout .sector-goal-main,
+    .sector-average-layout .sector-goal-side {
+      min-height: 0;
+    }
+    .sector-average-layout .sector-goal-main {
+      gap: 12px;
+    }
+    .sector-average-layout .sector-goal-hero {
+      padding: 16px 18px;
+    }
+    .sector-average-layout .sector-goal-metrics {
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .sector-average-layout .sector-goal-metric {
+      padding: 12px 14px;
+    }
+    .sector-average-layout .sector-goal-chart {
+      padding: 14px 16px;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+    .sector-average-layout .sector-goal-row {
+      gap: 10px;
+    }
+    .sector-average-layout .sector-goal-side-card {
+      padding: 12px 14px;
+    }
     .auth-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.95); display: none; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
     .auth-overlay.visible { display: flex; }
     .auth-card { width: min(100%, 420px); border: 1px solid #e5e7eb; border-radius: 24px; padding: 28px; background: #fff; box-shadow: 0 16px 48px rgba(15,23,42,0.08); }
@@ -916,8 +949,8 @@
       <section id="ridMilestoneBanner" class="mb-8 hidden-state"></section>
 
       <section class="dashboard-panel-grid mb-8" aria-label="Graficos">
-        <div class="border border-gray-100 rounded-2xl p-5 animate-in animate-in-d4"><div class="flex items-center justify-between mb-4"><div><h2 class="font-semibold text-gray-900 text-base">Status dos RIDs</h2><p class="text-xs text-gray-400 mt-1">Distribuicao dos RIDs criados no periodo</p></div></div><div id="statusGoalPanel" class="mb-4"></div><div id="statusBoard" class="space-y-4"></div></div>
-        <div class="border border-gray-100 rounded-2xl p-5 animate-in animate-in-d5"><div class="flex items-center justify-between gap-3 mb-4"><div><h2 id="sectorBoardTitle" class="font-semibold text-gray-900 text-base">Setores com mais RIDs</h2><p id="sectorBoardSubtitle" class="text-xs text-gray-400 mt-1">Distribuicao dos setores com maior volume no recorte</p></div><button type="button" id="toggleSectorBoardMode" class="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">Ver metas</button></div><div id="sectorBoard"></div></div>
+        <div class="border border-gray-100 rounded-2xl p-5 animate-in animate-in-d4"><div class="flex items-center justify-between mb-4"><div><h2 class="font-semibold text-gray-900 text-base">Status dos RIDs</h2><p class="text-xs text-gray-400 mt-1">Distribuicao dos RIDs criados no periodo</p></div></div><div id="statusGoalPanel" class="mb-4"></div><div id="statusBoard" class="space-y-4"></div><div id="statusHeadcountBoard" class="mt-4"></div></div>
+        <div class="border border-gray-100 rounded-2xl p-5 animate-in animate-in-d5"><div class="flex flex-wrap items-start justify-between gap-3 mb-4"><div><h2 id="sectorBoardTitle" class="font-semibold text-gray-900 text-base">Setores com mais RIDs</h2><p id="sectorBoardSubtitle" class="text-xs text-gray-400 mt-1">Distribuicao dos setores com maior volume no recorte</p></div><div class="flex items-center gap-2"><button type="button" id="toggleSectorBoardFilters" class="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">Filtros</button><select id="toggleSectorBoardMode" class="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"><option value="volume">Ver volume</option><option value="goals">Ver metas</option><option value="avg-user">Medias p/usuario</option></select></div></div><div id="sectorBoardFiltersPanel" class="hidden-state rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 mb-4"><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="flex flex-col gap-1"><span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Mes</span><select id="sectorBoardMonthFilter" class="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 outline-none"><option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Marco</option><option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option><option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option><option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option></select></label><label class="flex flex-col gap-1"><span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Ano</span><input type="number" id="sectorBoardYearFilter" inputmode="numeric" min="2020" max="2100" class="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 outline-none" placeholder="Digite o ano"></label></div></div><div id="sectorBoard"></div></div>
       </section>
 
       <section class="dashboard-panel-grid mb-8">
