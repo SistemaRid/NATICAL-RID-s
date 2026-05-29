@@ -17,6 +17,8 @@
   const db = firebase.firestore();
   const RID_IMAGE_MAX_BYTES = 350 * 1024;
   const RID_IMAGE_MAX_DIMENSION = 1280;
+  const BEHAVIORAL_DEVIATION_TYPE = "Desvio Comportamental";
+  const BEHAVIORAL_DEVIATION_FIELD_KEY = "behavioralDeviationEmployeeName";
 
   const state = {
     currentUser: null,
@@ -249,6 +251,18 @@
     dom.newRidResponsibleLeader.innerHTML = baseOption + options;
   }
 
+  function syncBehavioralDeviationField() {
+    const behavioralDeviationTrigger = dom.newRidForm?.querySelector('[name="incidentType"]');
+    const behavioralDeviationContainer = document.getElementById("behavioralDeviationEmployeeField");
+    const behavioralDeviationInput = dom.newRidForm?.querySelector(`[name="${BEHAVIORAL_DEVIATION_FIELD_KEY}"]`);
+    const shouldShow = String(behavioralDeviationTrigger?.value || "").trim() === BEHAVIORAL_DEVIATION_TYPE;
+    behavioralDeviationContainer?.classList.toggle("hidden-state", !shouldShow);
+    if (behavioralDeviationInput) {
+      behavioralDeviationInput.required = shouldShow;
+      if (!shouldShow) behavioralDeviationInput.value = "";
+    }
+  }
+
   function resetNewRidForm() {
     dom.newRidForm.reset();
     dom.newRidEmitter.textContent = formatField(state.currentUserData?.name, "-");
@@ -262,6 +276,7 @@
       const contractTypeSelect = dom.newRidForm.querySelector('[name="contractType"]');
       if (contractTypeSelect) contractTypeSelect.value = state.currentUserData.contractType;
     }
+    syncBehavioralDeviationField();
     setNewRidFeedback("");
   }
 
@@ -296,6 +311,17 @@
     const leaderId = formData.get("responsibleLeader") || "";
     const leader = state.leaders.find((item) => item.id === leaderId);
     const status = String(formData.get("status") || "VENCIDO").toUpperCase();
+    const incidentType = String(formData.get("incidentType") || "").trim();
+    const behavioralDeviationEmployeeName = String(formData.get(BEHAVIORAL_DEVIATION_FIELD_KEY) || "").trim();
+    const customFields = {};
+
+    if (incidentType === BEHAVIORAL_DEVIATION_TYPE && behavioralDeviationEmployeeName) {
+      customFields[BEHAVIORAL_DEVIATION_FIELD_KEY] = {
+        label: "Nome do colaborador do desvio",
+        value: behavioralDeviationEmployeeName,
+        type: "text"
+      };
+    }
 
     return {
       emitterId: state.currentUser.uid,
@@ -305,7 +331,7 @@
       unit: formData.get("unit"),
       sector: state.currentUserData.sector || "",
       emissionDate: formData.get("emissionDate"),
-      incidentType: formData.get("incidentType"),
+      incidentType,
       detectionOrigin: formData.get("detectionOrigin"),
       location: formData.get("location"),
       description: formData.get("description"),
@@ -314,7 +340,8 @@
       image: null,
       status,
       responsibleLeader: leaderId,
-      responsibleLeaderName: leader?.name || ""
+      responsibleLeaderName: leader?.name || "",
+      customFields
     };
   }
 
@@ -342,6 +369,7 @@
       imageDataUrl: payload.image?.dataUrl || null,
       imageContentType: payload.image?.contentType || null,
       imageOriginalName: payload.image?.originalName || null,
+      customFields: payload.customFields || {},
       status: isCorrectedNow ? "CORRIGIDO" : "VENCIDO",
       responsibleLeader: payload.responsibleLeader || "",
       responsibleLeaderName: payload.responsibleLeaderName || "",
@@ -664,6 +692,8 @@
   }
 
   function bindEvents() {
+    const behavioralDeviationTrigger = dom.newRidForm?.querySelector('[name="incidentType"]');
+
     dom.loginCpf.addEventListener("input", () => {
       dom.loginCpf.value = maskCpf(dom.loginCpf.value);
     });
@@ -707,6 +737,8 @@
     dom.newRidModal.addEventListener("click", (event) => {
       if (event.target === dom.newRidModal) closeNewRidModal();
     });
+    behavioralDeviationTrigger?.addEventListener("change", syncBehavioralDeviationField);
+    syncBehavioralDeviationField();
     dom.newRidForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       dom.newRidSubmit.disabled = true;

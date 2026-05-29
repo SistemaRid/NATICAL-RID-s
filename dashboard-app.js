@@ -1120,6 +1120,7 @@
 
     return state.allUsers
       .filter((user) => user && typeof user.name === "string")
+      .filter((user) => !isThirdPartyUser(user))
       .filter((user) => !period.sector || user.sector === period.sector)
       .map((user) => {
         const matchedRids = state.allRids
@@ -2073,30 +2074,29 @@
     }
 
     const userAverages = getUserAverageMetrics(period);
-    const activeUserAverages = getUsersWithRidsInPeriod(period);
-    const activeUsersBySector = activeUserAverages.reduce((map, user) => {
+    const usersBySector = userAverages.reduce((map, user) => {
       const sectorKey = String(user.sector || "");
       map[sectorKey] = (map[sectorKey] || 0) + 1;
       return map;
     }, {});
-    const visibleItems = items
+    const rankedItems = items
       .map((item) => ({
         ...item,
-        activeUsersCount: activeUsersBySector[String(item.sector || "")] || 0,
-        averagePerUser: (activeUsersBySector[String(item.sector || "")] || 0) > 0
-          ? item.achieved / activeUsersBySector[String(item.sector || "")]
+        activeUsersCount: usersBySector[String(item.sector || "")] || 0,
+        averagePerUser: (usersBySector[String(item.sector || "")] || 0) > 0
+          ? item.achieved / usersBySector[String(item.sector || "")]
           : 0
       }))
       .sort((a, b) => {
         if ((b.averagePerUser || 0) !== (a.averagePerUser || 0)) return (b.averagePerUser || 0) - (a.averagePerUser || 0);
         if ((b.achieved || 0) !== (a.achieved || 0)) return (b.achieved || 0) - (a.achieved || 0);
         return String(a.sector || "").localeCompare(String(b.sector || ""), "pt-BR");
-      })
-      .slice(0, 6);
+      });
+    const visibleItems = rankedItems.slice(0, 6);
 
-    const bestItem = visibleItems[0] || null;
-    const totalUsers = activeUserAverages.length;
-    const totalAchieved = visibleItems.reduce((sum, item) => sum + (item.achieved || 0), 0);
+    const bestItem = rankedItems[0] || null;
+    const totalUsers = userAverages.length;
+    const totalAchieved = rankedItems.reduce((sum, item) => sum + (item.achieved || 0), 0);
     const overallAverage = totalUsers > 0 ? totalAchieved / totalUsers : 0;
     const userListId = "sectorUserAverageList";
     const userSearchId = "sectorUserAverageSearch";
@@ -2113,7 +2113,7 @@
               </div>
               <div class="text-right">
               <div class="text-sm font-semibold text-gray-900">${totalUsers}</div>
-                <div class="text-[11px] uppercase tracking-wider text-gray-400">usuarios que emitiram</div>
+                <div class="text-[11px] uppercase tracking-wider text-gray-400">usuarios internos</div>
               </div>
             </div>
             <div class="sector-goal-metrics">
@@ -2122,7 +2122,7 @@
                 <div class="text-xl font-bold text-gray-900 mt-1">${totalAchieved}</div>
               </div>
               <div class="sector-goal-metric">
-                <div class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Usuarios ativos</div>
+                <div class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Usuarios internos</div>
                 <div class="text-xl font-bold text-gray-900 mt-1">${totalUsers}</div>
               </div>
               <div class="sector-goal-metric">
@@ -2166,7 +2166,7 @@
           <div class="sector-goal-side-card flex flex-col">
             <div class="flex items-center justify-between gap-3">
               <div class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Usuarios</div>
-              <div class="text-[10px] text-gray-400">${activeUserAverages.length} nomes</div>
+              <div class="text-[10px] text-gray-400">${userAverages.length} nomes</div>
             </div>
             <div class="mt-3">
               <input
@@ -2188,7 +2188,7 @@
     function renderUserList(query = "") {
       if (!userList) return;
       const normalizedQuery = String(query || "").trim().toLowerCase();
-      const filteredUsers = activeUserAverages.filter((item) => String(item.name || "").toLowerCase().includes(normalizedQuery));
+      const filteredUsers = userAverages.filter((item) => String(item.name || "").toLowerCase().includes(normalizedQuery));
 
       if (!filteredUsers.length) {
         userList.innerHTML = '<div class="rounded-xl border border-dashed border-gray-200 px-3 py-4 text-center text-xs text-gray-400">Nenhum usuario encontrado.</div>';

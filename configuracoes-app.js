@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   const firebaseConfig = {
     apiKey: "AIzaSyBVnWDyQXWNf9JFE3S5W_eDqmrp7B4_nTE",
     authDomain: "natical-rids.firebaseapp.com",
@@ -374,7 +374,7 @@
   function formatAnnouncementWindow(data) {
     const startDate = String(data?.startDate || "").trim();
     const days = Number(data?.daysVisible || 0);
-    if (!startDate || !days) return "janela não definida";
+    if (!startDate || !days) return "janela nÃ£o definida";
     return `${startDate} por ${days} dia${days === 1 ? "" : "s"}`;
   }
 
@@ -388,6 +388,7 @@
     const date = value?.toDate ? value.toDate() : new Date(value || "");
     return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("pt-BR");
   }
+
 
   function cloneRidFormSchema(schema) {
     return JSON.parse(JSON.stringify(schema || []));
@@ -809,8 +810,8 @@
       <article class="border border-gray-200 rounded-2xl bg-white px-4 py-4">
         <div class="flex items-start justify-between gap-3">
           <div>
-            <div class="text-sm font-semibold text-gray-900">${formatField(item.title, "Sem título")}</div>
-            <div class="text-xs text-gray-500 mt-1">${escapeHtml(getAnnouncementTargetLabel(item.target))} • ${escapeHtml(formatAnnouncementWindow(item))}</div>
+            <div class="text-sm font-semibold text-gray-900">${formatField(item.title, "Sem tÃ­tulo")}</div>
+            <div class="text-xs text-gray-500 mt-1">${escapeHtml(getAnnouncementTargetLabel(item.target))} â€¢ ${escapeHtml(formatAnnouncementWindow(item))}</div>
           </div>
           <span class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${item.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}">
             ${item.isActive ? "Ativo" : "Encerrado"}
@@ -909,18 +910,18 @@
         resetAnnouncementForm();
         dom.announcementNotice.textContent = "Nenhum aviso global configurado no momento.";
         renderAnnouncementList([]);
-        dom.announcementFeedback.textContent = "Ainda não existe aviso salvo.";
+        dom.announcementFeedback.textContent = "Ainda nÃ£o existe aviso salvo.";
         return;
       }
 
       const latest = items[0];
       dom.announcementNotice.textContent = latest.isActive
-        ? `Último aviso ativo para ${formatAnnouncementWindow(latest)} em ${getAnnouncementTargetLabel(latest.target)}.`
-        : "O último aviso salvo está desativado.";
+        ? `Ãšltimo aviso ativo para ${formatAnnouncementWindow(latest)} em ${getAnnouncementTargetLabel(latest.target)}.`
+        : "O Ãºltimo aviso salvo estÃ¡ desativado.";
       renderAnnouncementList(items);
       dom.announcementFeedback.textContent = "Avisos carregados com sucesso.";
     } catch (error) {
-      dom.announcementFeedback.textContent = "Não foi possível carregar o aviso.";
+      dom.announcementFeedback.textContent = "NÃ£o foi possÃ­vel carregar o aviso.";
     }
   }
 
@@ -940,7 +941,7 @@
     const isActive = dom.announcementActive.checked;
 
     if (!title || !message || !startDate || !daysVisible || !dailyLimit) {
-      dom.announcementFeedback.textContent = "Preencha título, mensagem, data de início, dias e vezes por dia.";
+      dom.announcementFeedback.textContent = "Preencha tÃ­tulo, mensagem, data de inÃ­cio, dias e vezes por dia.";
       return;
     }
 
@@ -963,11 +964,11 @@
       resetAnnouncementForm();
       dom.announcementNotice.textContent = isActive
         ? `Aviso ativo para ${formatAnnouncementWindow({ startDate, daysVisible })} em ${getAnnouncementTargetLabel(target)}.`
-        : "Aviso salvo, porém desativado.";
+        : "Aviso salvo, porÃ©m desativado.";
       dom.announcementFeedback.textContent = "Aviso salvo com sucesso.";
       await loadAnnouncement();
     } catch (error) {
-      dom.announcementFeedback.textContent = "Não foi possível salvar o aviso.";
+      dom.announcementFeedback.textContent = "NÃ£o foi possÃ­vel salvar o aviso.";
     } finally {
       dom.saveAnnouncementButton.disabled = false;
     }
@@ -984,7 +985,7 @@
       dom.announcementFeedback.textContent = nextActive ? "Aviso ativado." : "Aviso desativado.";
       await loadAnnouncement();
     } catch (error) {
-      dom.announcementFeedback.textContent = "Não foi possível alterar o status do aviso.";
+      dom.announcementFeedback.textContent = "NÃ£o foi possÃ­vel alterar o status do aviso.";
     }
   }
 
@@ -1004,7 +1005,7 @@
       dom.announcementActive.checked = Boolean(data.isActive);
       dom.announcementFeedback.textContent = "Campos preenchidos com base no aviso selecionado.";
     } catch (error) {
-      dom.announcementFeedback.textContent = "Não foi possível carregar esse aviso para edição.";
+      dom.announcementFeedback.textContent = "NÃ£o foi possÃ­vel carregar esse aviso para ediÃ§Ã£o.";
     }
   }
 
@@ -1329,3 +1330,5 @@
 
   init();
 })();
+
+

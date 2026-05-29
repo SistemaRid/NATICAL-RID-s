@@ -16,6 +16,8 @@
   const RID_FORM_SETTINGS_DOC = db.collection("appSettings").doc("ridFormSchema");
   const messaging = typeof firebase.messaging === "function" ? firebase.messaging() : null;
   const WEB_PUSH_VAPID_KEY = "BI1bjhLMKixbDQsSZ98G40pFeaYqQnxDShyqYrViqepuybo0U8VtCQcGumv7R6WzaPRoLvkLY_pIK8Q4UGg8mLg";
+  const BEHAVIORAL_DEVIATION_TYPE = "Desvio Comportamental";
+  const BEHAVIORAL_DEVIATION_FIELD_KEY = "behavioralDeviationEmployeeName";
 
   const STORAGE_KEYS = {
     auth: "ridThirdPartyMobileOfflineAuth",
@@ -454,6 +456,28 @@
         ${helperText}
       </div>
     `;
+  }
+
+  function renderBehavioralDeviationEmployeeField(value = "") {
+    return `
+      <div class="field hidden" id="behavioral-deviation-employee-field">
+        <label>Nome do colaborador do desvio</label>
+        <input name="${escapeHtml(BEHAVIORAL_DEVIATION_FIELD_KEY)}" value="${escapeHtml(value)}" placeholder="Digite o nome do colaborador">
+      </div>
+    `;
+  }
+
+  function syncBehavioralDeviationEmployeeField(form) {
+    if (!form) return;
+    const incidentTypeField = form.elements.namedItem("incidentType");
+    const employeeFieldWrapper = form.querySelector("#behavioral-deviation-employee-field");
+    const employeeFieldInput = form.elements.namedItem(BEHAVIORAL_DEVIATION_FIELD_KEY);
+    if (!incidentTypeField || !employeeFieldWrapper || !employeeFieldInput) return;
+
+    const shouldShow = String(incidentTypeField.value || "").trim() === BEHAVIORAL_DEVIATION_TYPE;
+    employeeFieldWrapper.classList.toggle("hidden", !shouldShow);
+    employeeFieldInput.required = shouldShow;
+    if (!shouldShow) employeeFieldInput.value = "";
   }
 
   function captureFormDraft(form) {
@@ -1773,6 +1797,19 @@
       }
     });
 
+    if (formData.has(BEHAVIORAL_DEVIATION_FIELD_KEY)) {
+      const employeeName = String(formData.get(BEHAVIORAL_DEVIATION_FIELD_KEY) || "").trim();
+      if (payload.incidentType === BEHAVIORAL_DEVIATION_TYPE && employeeName) {
+        payload.customFields[BEHAVIORAL_DEVIATION_FIELD_KEY] = {
+          label: "Nome do colaborador do desvio",
+          value: employeeName,
+          type: "text"
+        };
+      } else {
+        delete payload.customFields[BEHAVIORAL_DEVIATION_FIELD_KEY];
+      }
+    }
+
     return payload;
   }
 
@@ -2552,6 +2589,7 @@
 
     const today = new Date().toISOString().slice(0, 10);
     const fieldsHtml = (state.ridFormSchema || []).map((field) => renderRidModalField(field, today)).join("");
+    const behavioralDeviationFieldHtml = renderBehavioralDeviationEmployeeField(state.ridDraft?.[BEHAVIORAL_DEVIATION_FIELD_KEY] || "");
     return `
       <div class="modal-root" id="rid-modal">
         <div class="modal-card">
@@ -2565,6 +2603,7 @@
               <input value="${escapeHtml(state.currentUserData.name || "")}" readonly>
             </div>
             ${fieldsHtml}
+            ${behavioralDeviationFieldHtml}
             <div class="actions">
               <button class="btn btn-success" type="submit">${state.online ? "Emitir RID" : "Emitir (pendente)"}</button>
               <button class="btn btn-soft" type="button" data-close-modal="true">Cancelar</button>
@@ -3189,6 +3228,12 @@
     document.getElementById("maintenance-form")?.addEventListener("submit", handleMaintenanceSubmit);
     bindDraftPersistence("rid-form", "ridDraft");
     bindDraftPersistence("maintenance-form", "maintenanceDraft");
+    const ridForm = document.getElementById("rid-form");
+    if (ridForm) {
+      const incidentTypeField = ridForm.elements.namedItem("incidentType");
+      incidentTypeField?.addEventListener("change", () => syncBehavioralDeviationEmployeeField(ridForm));
+      syncBehavioralDeviationEmployeeField(ridForm);
+    }
 
     document.querySelectorAll("[data-sync-rid]").forEach((button) => {
       button.addEventListener("click", (event) => {
