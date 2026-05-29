@@ -1978,7 +1978,7 @@
       return;
     }
 
-    const visibleItems = items.slice(0, 6);
+    const visibleItems = items;
     const bestItem = visibleItems[0] || null;
     const totalGoal = visibleItems.reduce((sum, item) => sum + (item.goal || 0), 0);
     const totalAchieved = visibleItems.reduce((sum, item) => sum + (item.achieved || 0), 0);
@@ -2092,7 +2092,7 @@
         if ((b.achieved || 0) !== (a.achieved || 0)) return (b.achieved || 0) - (a.achieved || 0);
         return String(a.sector || "").localeCompare(String(b.sector || ""), "pt-BR");
       });
-    const visibleItems = rankedItems.slice(0, 6);
+    const visibleItems = rankedItems;
 
     const bestItem = rankedItems[0] || null;
     const totalUsers = userAverages.length;
