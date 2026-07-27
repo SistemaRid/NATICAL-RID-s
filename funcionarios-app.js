@@ -397,6 +397,10 @@
   function normalizeEmployeeFormSchema(schema) {
     if (!Array.isArray(schema) || !schema.length) return cloneSchema(DEFAULT_EMPLOYEE_FORM_SCHEMA);
     const normalized = schema.map(normalizeFormField);
+    if (!normalized.some((field) => field.key === "isAdmin")) {
+      const adminField = DEFAULT_EMPLOYEE_FORM_SCHEMA.find((field) => field.key === "isAdmin");
+      if (adminField) normalized.push(normalizeFormField(adminField, normalized.length));
+    }
     if (!normalized.some((field) => field.key === "isObserver")) {
       const observerField = DEFAULT_EMPLOYEE_FORM_SCHEMA.find((field) => field.key === "isObserver");
       if (observerField) normalized.push(normalizeFormField(observerField, normalized.length));
@@ -447,7 +451,7 @@
 
   function shouldRenderEmployeeField(field, mode) {
     if (field.key === "password") return mode === "create";
-    if (field.key === "isAdmin") return mode === "create" && isDeveloperUser(state.currentUserData);
+    if (field.key === "isAdmin") return isDeveloperUser(state.currentUserData);
     if (field.key === "isObserver") return mode === "edit" && isDeveloperUser(state.currentUserData);
     if (field.key === "vacationStart" || field.key === "vacationEnd") return mode === "edit";
     return true;
@@ -498,6 +502,7 @@
 
     const required = field.required && !(field.key === "isAdmin" || field.key === "isObserver") ? "required" : "";
     const value = getEmployeeFormFieldValue(employee, field.key);
+    const label = field.key === "isAdmin" && mode === "edit" ? "Tornar administrador" : field.label;
     const helper = field.helperText ? `<p class="text-xs text-gray-500 mt-2">${escapeHtml(field.helperText)}</p>` : "";
     const wrapperClass = (field.key === "vacationStart" || field.key === "vacationEnd")
       ? "md:col-span-2"
@@ -506,7 +511,7 @@
     if (field.type === "checkbox") {
       return `
         <div class="${wrapperClass}">
-          <div class="text-sm font-medium text-gray-700 block mb-2 invisible select-none">${escapeHtml(field.label)}</div>
+          <div class="text-sm font-medium text-gray-700 block mb-2 invisible select-none">${escapeHtml(label)}</div>
           <label class="flex min-h-[52px] w-full items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700">
             <input
               type="checkbox"
@@ -515,7 +520,7 @@
               class="rounded border-indigo-200"
               ${value ? "checked" : ""}
             >
-            ${escapeHtml(field.label)}
+            ${escapeHtml(label)}
           </label>
           ${helper}
         </div>
@@ -600,10 +605,24 @@
   }
 
   function renderEmployeeFormFields(mode, employee = null) {
-    const html = (state.employeeFormSchema || [])
+    const fields = state.employeeFormSchema || [];
+    const shouldGroupAccessFields = mode === "edit";
+    const accessFieldKeys = new Set(["isAdmin", "isObserver"]);
+    const html = fields
+      .filter((field) => !shouldGroupAccessFields || !accessFieldKeys.has(field.key))
       .map((field) => renderEmployeeField(field, mode, employee))
       .join("");
-    dom.employeeFormFields.innerHTML = html;
+    const accessHtml = shouldGroupAccessFields
+      ? fields
+        .filter((field) => accessFieldKeys.has(field.key))
+        .map((field) => renderEmployeeField(field, mode, employee))
+        .filter(Boolean)
+        .join("")
+      : "";
+
+    dom.employeeFormFields.innerHTML = html + (accessHtml
+      ? `<div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">${accessHtml}</div>`
+      : "");
   }
 
   function getEmployeeFormElement(key) {
@@ -1152,6 +1171,9 @@
     const sector = getEmployeeFormValue("sector");
     const role = getEmployeeFormValue("role") || getEmployeeFormValue("function");
     const makeObserver = getEmployeeFormValue("isObserver") === "true";
+    const makeAdmin = isDeveloperUser(state.currentUserData)
+      ? getEmployeeFormValue("isAdmin") === "true"
+      : !!employee.isAdmin;
     const { vacationPeriod, error: vacationError } = readVacationPeriodFromForm();
     const customFields = {};
 
@@ -1190,9 +1212,9 @@
         role,
         vacationPeriod,
         isObserver: makeObserver,
-        isAdmin: makeObserver ? false : !!employee.isAdmin,
+        isAdmin: makeObserver ? false : makeAdmin,
         isDeveloper: makeObserver ? false : !!employee.isDeveloper,
-        userType: makeObserver ? "Observador" : employee.isAdmin ? "Administrador" : employmentType === "TERCEIRO" ? "Terceiro" : "Funcionario",
+        userType: makeObserver ? "Observador" : makeAdmin ? "Administrador" : employmentType === "TERCEIRO" ? "Terceiro" : "Funcionario",
         customFields
       };
       await db.collection("users").doc(employee.id).update(updatedEmployee);
