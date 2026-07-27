@@ -6,6 +6,8 @@
   <title>Dashboard Pro</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -302,6 +304,32 @@
       padding: 14px 16px;
       background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
     }
+    .sector-rid-status-layout {
+      grid-template-columns: minmax(0, 1fr);
+      min-height: 0;
+    }
+    .sector-rid-status-layout .sector-goal-main {
+      min-height: 0;
+      gap: 12px;
+    }
+    .sector-rid-status-layout .sector-goal-hero {
+      padding: 14px 20px;
+      border-radius: 18px;
+    }
+    .sector-rid-status-layout .sector-goal-metrics {
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .sector-rid-status-layout .sector-goal-metric {
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+    .sector-rid-status-layout .sector-goal-chart {
+      flex: 0 0 auto;
+      padding: 12px 16px;
+      border-radius: 18px;
+      gap: 8px;
+    }
     .sector-average-layout {
       min-height: 0;
       gap: 20px;
@@ -383,6 +411,12 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 20px;
+      align-items: start;
+    }
+    .sector-board-scroll-panel {
+      height: 540px;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
     }
     .delete-requests-grid {
       display: grid;
@@ -909,7 +943,7 @@
             <div id="filtersPanel" class="filter-panel">
               <div class="text-xs uppercase tracking-wider font-semibold text-gray-400 mb-4">Filtros do dashboard</div>
               <div class="space-y-3">
-                <select id="dashboardMonth" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+                <select id="dashboardMonth" autocomplete="off" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
                   <option value="all">Todos os meses</option>
                   <option value="1">Janeiro</option>
                   <option value="2">Fevereiro</option>
@@ -924,8 +958,8 @@
                   <option value="11">Novembro</option>
                   <option value="12">Dezembro</option>
                 </select>
-                <input id="dashboardYear" type="number" min="2020" max="2100" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
-                <select id="dashboardSector" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50"><option value="">Todos os setores</option></select>
+                <input id="dashboardYear" type="number" min="2020" max="2100" autocomplete="off" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50">
+                <select id="dashboardSector" autocomplete="off" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-gray-400 bg-gray-50"><option value="">Todos os setores</option></select>
               </div>
               <div class="flex items-center justify-end gap-3 mt-4">
                 <button id="clearFiltersButton" type="button" class="px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-medium text-gray-600">Limpar filtros</button>
@@ -950,7 +984,7 @@
 
       <section class="dashboard-panel-grid mb-8" aria-label="Graficos">
         <div class="border border-gray-100 rounded-2xl p-5 animate-in animate-in-d4"><div class="flex items-center justify-between mb-4"><div><h2 class="font-semibold text-gray-900 text-base">Status dos RIDs</h2><p class="text-xs text-gray-400 mt-1">Distribuicao dos RIDs criados no periodo</p></div></div><div id="statusGoalPanel" class="mb-4"></div><div id="statusBoard" class="space-y-4"></div><div id="statusHeadcountBoard" class="mt-4"></div></div>
-        <div class="border border-gray-100 rounded-2xl p-5 animate-in animate-in-d5"><div class="flex flex-wrap items-start justify-between gap-3 mb-4"><div><h2 id="sectorBoardTitle" class="font-semibold text-gray-900 text-base">Setores com mais RIDs</h2><p id="sectorBoardSubtitle" class="text-xs text-gray-400 mt-1">Distribuicao dos setores com maior volume no recorte</p></div><div class="flex items-center gap-2"><button type="button" id="toggleSectorBoardFilters" class="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">Filtros</button><select id="toggleSectorBoardMode" class="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"><option value="volume">Ver volume</option><option value="goals">Ver metas</option><option value="avg-user">Medias p/usuario</option></select></div></div><div id="sectorBoardFiltersPanel" class="hidden-state rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 mb-4"><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="flex flex-col gap-1"><span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Mes</span><select id="sectorBoardMonthFilter" class="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 outline-none"><option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Marco</option><option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option><option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option><option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option></select></label><label class="flex flex-col gap-1"><span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Ano</span><input type="number" id="sectorBoardYearFilter" inputmode="numeric" min="2020" max="2100" class="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 outline-none" placeholder="Digite o ano"></label></div></div><div id="sectorBoard"></div></div>
+        <div id="sectorBoardPanel" class="border border-gray-100 rounded-2xl p-5 animate-in animate-in-d5"><div class="flex flex-wrap items-start justify-between gap-3 mb-4"><div><h2 id="sectorBoardTitle" class="font-semibold text-gray-900 text-base">Setores com mais RIDs</h2><p id="sectorBoardSubtitle" class="text-xs text-gray-400 mt-1">Distribuicao dos setores com maior volume no recorte</p></div><div class="flex items-center gap-2"><button type="button" id="toggleSectorBoardFilters" class="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">Filtros</button><select id="toggleSectorBoardMode" class="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"><option value="volume">Ver volume</option><option value="goals">Ver metas</option><option value="avg-user">Medias p/usuario</option><option value="user-status">RIDs p/usuario</option></select></div></div><div id="sectorBoardFiltersPanel" class="hidden-state rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 mb-4"><div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><label class="flex flex-col gap-1"><span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Mes</span><select id="sectorBoardMonthFilter" class="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 outline-none"><option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Marco</option><option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option><option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option><option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option></select></label><label class="flex flex-col gap-1"><span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Ano</span><input type="number" id="sectorBoardYearFilter" inputmode="numeric" min="2020" max="2100" class="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 outline-none" placeholder="Digite o ano"></label></div></div><div id="sectorBoard"></div></div>
       </section>
 
       <section class="dashboard-panel-grid mb-8">
@@ -1027,6 +1061,6 @@
       window.setTimeout(() => footer.classList.remove("visible"), 10000);
     })();
   </script>
-  <script src="dashboard-app.js"></script>
+  <script src="dashboard-app.js?v=20260630-formacal-goals"></script>
 </body>
 </html>
