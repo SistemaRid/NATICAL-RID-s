@@ -15,6 +15,7 @@
   const auth = firebase.auth();
   auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
   const db = firebase.firestore();
+  const BEHAVIORAL_DEVIATION_FIELD_KEY = "behavioralDeviationEmployeeName";
 
   const state = {
     currentUser: null,
@@ -159,6 +160,11 @@
     return text || fallback;
   }
 
+  function getBehavioralDeviationEmployeeName(rid) {
+    const customField = rid?.customFields?.[BEHAVIORAL_DEVIATION_FIELD_KEY];
+    return formatField(customField?.value ?? rid?.[BEHAVIORAL_DEVIATION_FIELD_KEY]);
+  }
+
   function normalizeStatus(status) {
     return String(status || "")
       .normalize("NFD")
@@ -224,6 +230,7 @@
           rid.location,
           rid.description,
           rid.sector,
+          getBehavioralDeviationEmployeeName(rid),
           rid.status
         ].join(" ").toLowerCase();
         return haystack.includes(search);
@@ -254,6 +261,7 @@
           rid.location,
           rid.description,
           rid.sector,
+          getBehavioralDeviationEmployeeName(rid),
           rid.status
         ].join(" ").toLowerCase();
         return haystack.includes(search);
@@ -272,6 +280,7 @@
         <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(formatField(rid.sector))}</td>
         <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(formatField(rid.location))}</td>
         <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(formatField(rid.incidentType))}</td>
+        <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(getBehavioralDeviationEmployeeName(rid))}</td>
         <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(formatField(rid.detectionOrigin))}</td>
         <td class="px-4 py-3 text-sm text-gray-700 max-w-[340px]">${escapeHtml(formatField(rid.description))}</td>
         <td class="px-4 py-3 text-sm text-gray-700">${escapeHtml(formatField(rid.riskClassification))}</td>
@@ -296,7 +305,7 @@
     if (!rows.length) {
       dom.reportTableBody.innerHTML = `
         <tr>
-          <td colspan="17" class="px-4 py-10 text-center text-sm text-gray-500">Nenhum RID encontrado no periodo selecionado.</td>
+          <td colspan="18" class="px-4 py-10 text-center text-sm text-gray-500">Nenhum RID encontrado no periodo selecionado.</td>
         </tr>
       `;
     } else {
@@ -306,7 +315,7 @@
     if (!lateRows.length) {
       dom.lateReportTableBody.innerHTML = `
         <tr>
-          <td colspan="17" class="px-4 py-10 text-center text-sm text-gray-500">Nenhum RID atrasado de meses anteriores para este recorte.</td>
+          <td colspan="18" class="px-4 py-10 text-center text-sm text-gray-500">Nenhum RID atrasado de meses anteriores para este recorte.</td>
         </tr>
       `;
     } else {
@@ -420,7 +429,7 @@
     const lateRows = getLateRids();
     const lines = [
       "RIDs do periodo",
-      ["Unidade", "RID", "Data Emissao", "Emitente", "Tipo", "Setor", "Local do Incidente", "Genese do Incidente", "Origem da Deteccao", "Descricao", "Classificacao de Risco", "Acao Imediata", "Acoes Corretivas", "Responsavel", "Prazo", "Data Conclusao", "Status"].join(";")
+      ["Unidade", "RID", "Data Emissao", "Emitente", "Tipo", "Setor", "Local do Incidente", "Genese do Incidente", "Nome do Colaborador do Desvio", "Origem da Deteccao", "Descricao", "Classificacao de Risco", "Acao Imediata", "Acoes Corretivas", "Responsavel", "Prazo", "Data Conclusao", "Status"].join(";")
     ];
 
     rows.forEach((rid) => {
@@ -433,6 +442,7 @@
         formatField(rid.sector),
         formatField(rid.location),
         formatField(rid.incidentType),
+        formatField(getBehavioralDeviationEmployeeName(rid)),
         formatField(rid.detectionOrigin),
         `"${String(formatField(rid.description)).replace(/"/g, '""')}"`,
         formatField(rid.riskClassification),
@@ -447,7 +457,7 @@
 
     lines.push("");
     lines.push("RIDs atrasados de meses anteriores");
-    lines.push(["Unidade", "RID", "Data Emissao", "Emitente", "Tipo", "Setor", "Local do Incidente", "Genese do Incidente", "Origem da Deteccao", "Descricao", "Classificacao de Risco", "Acao Imediata", "Acoes Corretivas", "Responsavel", "Prazo", "Data Conclusao", "Status"].join(";"));
+    lines.push(["Unidade", "RID", "Data Emissao", "Emitente", "Tipo", "Setor", "Local do Incidente", "Genese do Incidente", "Nome do Colaborador do Desvio", "Origem da Deteccao", "Descricao", "Classificacao de Risco", "Acao Imediata", "Acoes Corretivas", "Responsavel", "Prazo", "Data Conclusao", "Status"].join(";"));
 
     lateRows.forEach((rid) => {
       lines.push([
@@ -459,6 +469,7 @@
         formatField(rid.sector),
         formatField(rid.location),
         formatField(rid.incidentType),
+        formatField(getBehavioralDeviationEmployeeName(rid)),
         formatField(rid.detectionOrigin),
         `"${String(formatField(rid.description)).replace(/"/g, '""')}"`,
         formatField(rid.riskClassification),
