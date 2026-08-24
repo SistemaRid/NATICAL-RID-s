@@ -12,10 +12,15 @@
     firebase.initializeApp(firebaseConfig);
   }
 
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+
   const auth = firebase.auth();
   auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
   const db = firebase.firestore();
   const ANNOUNCEMENTS_COLLECTION = db.collection("globalAnnouncements");
+  const WEB_PUSH_COLLECTION = db.collection("webPushCampaigns");
   const RID_FORM_SETTINGS_DOC = db.collection("appSettings").doc("ridFormSchema");
   const RID_FORM_FIXED_NOTE = "O emitente logado continua sendo mostrado automaticamente no app mobile.";
   const DEFAULT_RID_FORM_SCHEMA = [
@@ -226,9 +231,12 @@
       rid: [],
       employee: []
     },
+    activeNotificationTab: "announcement",
     activeSchemaTab: "rid",
     activeRidFormFieldIndex: null,
-    announcementImageDataUrl: ""
+    announcementImageDataUrl: "",
+    pushAudienceUsers: [],
+    selectedPushRecipientIds: new Set()
   };
 
   const dom = {
@@ -285,6 +293,27 @@
     saveAnnouncementButton: document.getElementById("saveAnnouncementButton"),
     announcementFeedback: document.getElementById("announcementFeedback"),
     announcementList: document.getElementById("announcementList"),
+    pushNotificationSection: document.getElementById("pushNotificationSection"),
+    pushNotificationNotice: document.getElementById("pushNotificationNotice"),
+    pushNotificationForm: document.getElementById("pushNotificationForm"),
+    pushNotificationTitle: document.getElementById("pushNotificationTitle"),
+    pushNotificationTarget: document.getElementById("pushNotificationTarget"),
+    pushNotificationMessage: document.getElementById("pushNotificationMessage"),
+    pushRecipientSearch: document.getElementById("pushRecipientSearch"),
+    pushRecipientRoleFilter: document.getElementById("pushRecipientRoleFilter"),
+    pushRecipientUnitFilter: document.getElementById("pushRecipientUnitFilter"),
+    pushRecipientSectorFilter: document.getElementById("pushRecipientSectorFilter"),
+    pushRecipientEmploymentFilter: document.getElementById("pushRecipientEmploymentFilter"),
+    pushRecipientCounts: document.getElementById("pushRecipientCounts"),
+    selectAllPushRecipientsButton: document.getElementById("selectAllPushRecipientsButton"),
+    selectFilteredPushRecipientsButton: document.getElementById("selectFilteredPushRecipientsButton"),
+    clearPushRecipientFiltersButton: document.getElementById("clearPushRecipientFiltersButton"),
+    clearPushRecipientsButton: document.getElementById("clearPushRecipientsButton"),
+    pushRecipientsList: document.getElementById("pushRecipientsList"),
+    loadPushNotificationsButton: document.getElementById("loadPushNotificationsButton"),
+    sendPushNotificationButton: document.getElementById("sendPushNotificationButton"),
+    pushNotificationFeedback: document.getElementById("pushNotificationFeedback"),
+    pushNotificationList: document.getElementById("pushNotificationList"),
     ridFormSection: document.getElementById("ridFormSection"),
     ridFormSectionTitle: document.getElementById("ridFormSectionTitle"),
     ridFormSectionSubtitle: document.getElementById("ridFormSectionSubtitle"),
@@ -344,12 +373,21 @@
     return legacyValue === true || String(legacyValue || "").toLowerCase() === "true";
   }
 
+  function hasLegacyObserverFlag(user) {
+    const legacyValue = user?.customFields?.isobserver?.value ?? user?.customFields?.isObserver?.value;
+    return legacyValue === true || String(legacyValue || "").toLowerCase() === "true";
+  }
+
   function isAdminUser(user) {
     return !!(user?.isAdmin || hasLegacyAdminFlag(user));
   }
 
   function isDeveloperUser(user) {
     return !!user?.isDeveloper;
+  }
+
+  function isObserverUser(user) {
+    return !!(user?.isObserver || hasLegacyObserverFlag(user) || String(user?.userType || "").trim().toLowerCase() === "observador");
   }
 
   function isPrivilegedUser(user = state.currentUserData) {
@@ -359,6 +397,7 @@
   function getRoleLabel(user) {
     if (isDeveloperUser(user)) return "Desenvolvedor";
     if (isAdminUser(user)) return "Administrador";
+    if (isObserverUser(user)) return "Observador";
     return "Usuario";
   }
 
@@ -374,7 +413,7 @@
   function formatAnnouncementWindow(data) {
     const startDate = String(data?.startDate || "").trim();
     const days = Number(data?.daysVisible || 0);
-    if (!startDate || !days) return "janela nÃ£o definida";
+    if (!startDate || !days) return "janela não definida";
     return `${startDate} por ${days} dia${days === 1 ? "" : "s"}`;
   }
 
@@ -389,6 +428,115 @@
     return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("pt-BR");
   }
 
+  function renderNotificationTabLayout() {
+    const announcementSection = dom.announcementSection;
+    const pushSection = dom.pushNotificationSection;
+    if (!announcementSection || !pushSection) return;
+    const canManageGlobalAnnouncements = isDeveloperUser(state.currentUserData);
+    const canSendTargetedPush = isPrivilegedUser(state.currentUserData);
+    if (!canManageGlobalAnnouncements && state.activeNotificationTab === "announcement") {
+      state.activeNotificationTab = "push";
+    }
+
+    const announcementPanel = document.getElementById("announcementPanel");
+    const pushPanel = document.getElementById("pushNotificationPanel");
+    const announcementTab = document.getElementById("announcementTab");
+    const pushNotificationTab = document.getElementById("pushNotificationTab");
+
+    if (announcementPanel) announcementPanel.classList.toggle("hidden-state", !canManageGlobalAnnouncements || state.activeNotificationTab !== "announcement");
+    if (pushPanel) pushPanel.classList.toggle("hidden-state", !canSendTargetedPush || state.activeNotificationTab !== "push");
+
+    if (announcementTab) {
+      announcementTab.classList.toggle("hidden-state", !canManageGlobalAnnouncements);
+      announcementTab.classList.toggle("active", state.activeNotificationTab === "announcement");
+    }
+
+    if (pushNotificationTab) {
+      pushNotificationTab.classList.toggle("hidden-state", !canSendTargetedPush);
+      pushNotificationTab.classList.toggle("active", state.activeNotificationTab === "push");
+    }
+  }
+
+  function setupNotificationSectionTabs() {
+    const announcementSection = dom.announcementSection;
+    const pushSection = dom.pushNotificationSection;
+    if (!announcementSection || !pushSection) return;
+    if (document.getElementById("notificationTabs")) {
+      renderNotificationTabLayout();
+      return;
+    }
+
+    const announcementHead = announcementSection.querySelector(".settings-head");
+    const announcementBody = announcementSection.querySelector(".settings-body");
+    const pushHead = pushSection.querySelector(".settings-head");
+    const pushBody = pushSection.querySelector(".settings-body");
+    if (!announcementHead || !announcementBody || !pushHead || !pushBody) return;
+
+    const titleEl = announcementHead.querySelector("h2");
+    const subtitleEl = announcementHead.querySelector("p");
+    if (titleEl) titleEl.textContent = "Central de notificacoes";
+    if (subtitleEl) subtitleEl.textContent = "Escolha entre aviso global e web push direcionada no mesmo card.";
+
+    const tabs = document.createElement("div");
+    tabs.id = "notificationTabs";
+    tabs.className = "schema-tabs";
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Editor de notificacoes");
+    tabs.innerHTML = `
+      <button id="announcementTab" type="button" class="schema-tab active">Aviso global</button>
+      <button id="pushNotificationTab" type="button" class="schema-tab">Web push</button>
+    `;
+    announcementHead.appendChild(tabs);
+
+    const announcementPanel = document.createElement("div");
+    announcementPanel.id = "announcementPanel";
+    announcementPanel.className = "notification-panel";
+    while (announcementBody.firstChild) {
+      announcementPanel.appendChild(announcementBody.firstChild);
+    }
+
+    const pushPanel = document.createElement("div");
+    pushPanel.id = "pushNotificationPanel";
+    pushPanel.className = "notification-panel web-push-scroll hidden-state";
+    while (pushBody.firstChild) {
+      pushPanel.appendChild(pushBody.firstChild);
+    }
+
+    announcementBody.appendChild(announcementPanel);
+    announcementBody.appendChild(pushPanel);
+
+    pushSection.classList.add("hidden-state");
+    pushSection.remove();
+
+    document.getElementById("announcementTab")?.addEventListener("click", () => {
+      state.activeNotificationTab = "announcement";
+      renderNotificationTabLayout();
+    });
+    document.getElementById("pushNotificationTab")?.addEventListener("click", () => {
+      state.activeNotificationTab = "push";
+      renderNotificationTabLayout();
+    });
+
+    renderNotificationTabLayout();
+  }
+
+  function normalizeEmploymentTypeLabel(value) {
+    const normalized = String(value || "").trim().toUpperCase();
+    if (normalized === "TERCEIRO") return "Terceiro";
+    if (normalized === "FUNCIONARIO") return "Funcionario";
+    return "Nao informado";
+  }
+
+  function getPushRecipientRoleKey(user) {
+    if (isDeveloperUser(user)) return "developer";
+    if (isAdminUser(user)) return "admin";
+    if (isObserverUser(user)) return "observer";
+    return "user";
+  }
+
+  function sortByLocale(items) {
+    return [...items].sort((a, b) => String(a).localeCompare(String(b), "pt-BR"));
+  }
 
   function cloneRidFormSchema(schema) {
     return JSON.parse(JSON.stringify(schema || []));
@@ -779,6 +927,19 @@
     dom.announcementImagePreviewImg.removeAttribute("src");
   }
 
+  function resetPushNotificationForm() {
+    dom.pushNotificationTitle.value = "";
+    dom.pushNotificationTarget.value = "all";
+    dom.pushNotificationMessage.value = "";
+    dom.pushRecipientSearch.value = "";
+    dom.pushRecipientRoleFilter.value = "";
+    dom.pushRecipientUnitFilter.value = "";
+    dom.pushRecipientSectorFilter.value = "";
+    dom.pushRecipientEmploymentFilter.value = "";
+    state.selectedPushRecipientIds = new Set();
+    renderPushRecipients();
+  }
+
   function updateAnnouncementImagePreview(dataUrl) {
     state.announcementImageDataUrl = String(dataUrl || "").trim();
     if (!state.announcementImageDataUrl) {
@@ -810,8 +971,8 @@
       <article class="border border-gray-200 rounded-2xl bg-white px-4 py-4">
         <div class="flex items-start justify-between gap-3">
           <div>
-            <div class="text-sm font-semibold text-gray-900">${formatField(item.title, "Sem tÃ­tulo")}</div>
-            <div class="text-xs text-gray-500 mt-1">${escapeHtml(getAnnouncementTargetLabel(item.target))} â€¢ ${escapeHtml(formatAnnouncementWindow(item))}</div>
+            <div class="text-sm font-semibold text-gray-900">${formatField(item.title, "Sem título")}</div>
+            <div class="text-xs text-gray-500 mt-1">${escapeHtml(getAnnouncementTargetLabel(item.target))} • ${escapeHtml(formatAnnouncementWindow(item))}</div>
           </div>
           <span class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${item.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}">
             ${item.isActive ? "Ativo" : "Encerrado"}
@@ -834,6 +995,214 @@
     `).join("");
   }
 
+  function getFilteredPushAudienceUsers() {
+    const search = String(dom.pushRecipientSearch.value || "").trim().toLowerCase();
+    const role = String(dom.pushRecipientRoleFilter.value || "").trim();
+    const unit = String(dom.pushRecipientUnitFilter.value || "").trim();
+    const sector = String(dom.pushRecipientSectorFilter.value || "").trim();
+    const employmentType = String(dom.pushRecipientEmploymentFilter.value || "").trim().toUpperCase();
+
+    return state.pushAudienceUsers.filter((user) => {
+      if (role && getPushRecipientRoleKey(user) !== role) return false;
+      if (unit && String(user.unit || "").trim() !== unit) return false;
+      if (sector && String(user.sector || "").trim() !== sector) return false;
+      if (employmentType && String(user.employmentType || "").trim().toUpperCase() !== employmentType) return false;
+      if (!search) return true;
+
+      const haystack = [
+        user.name,
+        user.email,
+        user.cpf,
+        user.unit,
+        user.sector,
+        user.role,
+        getRoleLabel(user)
+      ].join(" ").toLowerCase();
+
+      return haystack.includes(search);
+    });
+  }
+
+  function renderPushRecipientFilters() {
+    const units = sortByLocale(state.pushAudienceUsers.map((item) => formatField(item.unit, "")).filter(Boolean));
+    const sectors = sortByLocale(state.pushAudienceUsers.map((item) => formatField(item.sector, "")).filter(Boolean));
+    const uniqueUnits = [...new Set(units)];
+    const uniqueSectors = [...new Set(sectors)];
+
+    const selectedUnit = dom.pushRecipientUnitFilter.value;
+    const selectedSector = dom.pushRecipientSectorFilter.value;
+
+    dom.pushRecipientUnitFilter.innerHTML = `<option value="">Todas as unidades</option>${uniqueUnits.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("")}`;
+    dom.pushRecipientSectorFilter.innerHTML = `<option value="">Todos os setores</option>${uniqueSectors.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("")}`;
+
+    if (uniqueUnits.includes(selectedUnit)) dom.pushRecipientUnitFilter.value = selectedUnit;
+    if (uniqueSectors.includes(selectedSector)) dom.pushRecipientSectorFilter.value = selectedSector;
+  }
+
+  function renderPushRecipients() {
+    if (!dom.pushRecipientsList) return;
+    const filteredUsers = getFilteredPushAudienceUsers();
+    const selectedCount = state.selectedPushRecipientIds.size;
+    dom.pushRecipientCounts.textContent = `${filteredUsers.length} usuario(s) filtrado(s) e ${selectedCount} selecionado(s).`;
+
+    if (!filteredUsers.length) {
+      dom.pushRecipientsList.innerHTML = '<div class="notice-card text-sm text-gray-500">Nenhum usuario encontrado com os filtros atuais.</div>';
+      return;
+    }
+
+    dom.pushRecipientsList.innerHTML = filteredUsers.map((user) => {
+      const userId = String(user.id || "");
+      const checked = state.selectedPushRecipientIds.has(userId);
+      return `
+        <label class="recipient-card">
+          <input type="checkbox" data-push-recipient-id="${escapeHtml(userId)}" ${checked ? "checked" : ""}>
+          <div class="min-w-0">
+            <div class="recipient-card-title">${escapeHtml(formatField(user.name, "Sem nome"))}</div>
+            <div class="recipient-card-meta">
+              ${escapeHtml(formatField(user.email, "Sem email"))}<br>
+              CPF: ${escapeHtml(formatField(user.cpf, "-"))}
+            </div>
+            <div class="recipient-card-badges">
+              <span class="recipient-card-badge">${escapeHtml(getRoleLabel(user))}</span>
+              <span class="recipient-card-badge">${escapeHtml(normalizeEmploymentTypeLabel(user.employmentType))}</span>
+              <span class="recipient-card-badge">${escapeHtml(formatField(user.unit, "Sem unidade"))}</span>
+              <span class="recipient-card-badge">${escapeHtml(formatField(user.sector, "Sem setor"))}</span>
+            </div>
+          </div>
+        </label>
+      `;
+    }).join("");
+  }
+
+  function describePushTarget(target) {
+    if (target === "dashboard") return "Somente PC";
+    if (target === "mobile") return "Somente mobile";
+    return "PC e mobile";
+  }
+
+  function buildPushSelectionSummary(campaign) {
+    const selectedCount = Number(campaign?.recipientCount || 0);
+    const filterBits = [];
+    if (campaign?.recipientFilters?.role) filterBits.push(`perfil ${campaign.recipientFilters.role}`);
+    if (campaign?.recipientFilters?.unit) filterBits.push(`unidade ${campaign.recipientFilters.unit}`);
+    if (campaign?.recipientFilters?.sector) filterBits.push(`setor ${campaign.recipientFilters.sector}`);
+    if (campaign?.recipientFilters?.employmentType) filterBits.push(`categoria ${campaign.recipientFilters.employmentType}`);
+    const filterText = filterBits.length ? ` | base: ${filterBits.join(", ")}` : "";
+    return `${selectedCount} destinatario(s)${filterText}`;
+  }
+
+  function renderPushNotificationList(items) {
+    if (!items.length) {
+      dom.pushNotificationList.innerHTML = '<div class="notice-card text-sm text-gray-500">Nenhuma push cadastrada ainda.</div>';
+      return;
+    }
+
+    dom.pushNotificationList.innerHTML = items.map((item) => {
+      const status = String(item.status || "queued").trim().toLowerCase();
+      const badgeClass = status === "sent"
+        ? "bg-emerald-50 text-emerald-700"
+        : status === "failed"
+          ? "bg-red-50 text-red-600"
+          : "bg-amber-50 text-amber-700";
+      const badgeLabel = status === "sent" ? "Enviado" : status === "failed" ? "Falhou" : "Na fila";
+      return `
+        <article class="border border-gray-200 rounded-2xl bg-white px-4 py-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm font-semibold text-gray-900">${escapeHtml(formatField(item.title, "Sem titulo"))}</div>
+              <div class="text-xs text-gray-500 mt-1">${escapeHtml(describePushTarget(item.target))} | ${escapeHtml(buildPushSelectionSummary(item))}</div>
+            </div>
+            <span class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${badgeClass}">${badgeLabel}</span>
+          </div>
+          <div class="text-sm text-gray-600 mt-3 whitespace-pre-wrap">${escapeHtml(item.message || "")}</div>
+          <div class="text-[11px] text-gray-400 mt-3">
+            Criado em ${escapeHtml(formatDateTime(item.createdAt))} | Tokens enviados: ${escapeHtml(String(item.deliveredTokenCount || 0))}
+          </div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  async function loadPushAudienceUsers() {
+    try {
+      const snap = await db.collection("users").orderBy("name").get();
+      state.pushAudienceUsers = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      renderPushRecipientFilters();
+      renderPushRecipients();
+    } catch (error) {
+      state.pushAudienceUsers = [];
+      renderPushRecipientFilters();
+      renderPushRecipients();
+      dom.pushNotificationFeedback.textContent = "Nao foi possivel carregar a base de usuarios para a push.";
+    }
+  }
+
+  async function loadPushNotifications() {
+    dom.pushNotificationFeedback.textContent = "Carregando pushs...";
+    try {
+      const snap = await WEB_PUSH_COLLECTION.orderBy("createdAt", "desc").limit(20).get();
+      const items = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      renderPushNotificationList(items);
+      dom.pushNotificationFeedback.textContent = "Lista de pushs carregada com sucesso.";
+    } catch (error) {
+      dom.pushNotificationFeedback.textContent = "Nao foi possivel carregar a lista de pushs.";
+    }
+  }
+
+  async function savePushNotification(event) {
+    event.preventDefault();
+    if (!isPrivilegedUser(state.currentUserData)) {
+      dom.pushNotificationFeedback.textContent = "Apenas administrador ou desenvolvedor pode enviar web push.";
+      return;
+    }
+
+    const title = String(dom.pushNotificationTitle.value || "").trim();
+    const message = String(dom.pushNotificationMessage.value || "").trim();
+    const target = String(dom.pushNotificationTarget.value || "all").trim();
+    const selectedIds = [...state.selectedPushRecipientIds].filter(Boolean);
+
+    if (!title || !message) {
+      dom.pushNotificationFeedback.textContent = "Preencha titulo e mensagem da push.";
+      return;
+    }
+
+    if (!selectedIds.length) {
+      dom.pushNotificationFeedback.textContent = "Selecione pelo menos um destinatario antes de enviar.";
+      return;
+    }
+
+    dom.sendPushNotificationButton.disabled = true;
+    dom.pushNotificationFeedback.textContent = "Enfileirando push...";
+    try {
+      await WEB_PUSH_COLLECTION.add({
+        title,
+        message,
+        target,
+        status: "queued",
+        recipientUserIds: selectedIds,
+        recipientCount: selectedIds.length,
+        recipientFilters: {
+          role: String(dom.pushRecipientRoleFilter.value || "").trim(),
+          unit: String(dom.pushRecipientUnitFilter.value || "").trim(),
+          sector: String(dom.pushRecipientSectorFilter.value || "").trim(),
+          employmentType: String(dom.pushRecipientEmploymentFilter.value || "").trim().toUpperCase(),
+          search: String(dom.pushRecipientSearch.value || "").trim()
+        },
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdBy: state.currentUser.uid,
+        createdByName: state.currentUserData?.name || ""
+      });
+      dom.pushNotificationNotice.textContent = `Push criada para ${selectedIds.length} destinatario(s) em ${describePushTarget(target)}.`;
+      dom.pushNotificationFeedback.textContent = "Push colocada na fila com sucesso.";
+      resetPushNotificationForm();
+      await loadPushNotifications();
+    } catch (error) {
+      dom.pushNotificationFeedback.textContent = "Nao foi possivel criar a push.";
+    } finally {
+      dom.sendPushNotificationButton.disabled = false;
+    }
+  }
+
   function updateRoleNavigation() {
     document.querySelectorAll('[data-admin-only-nav="designated"]').forEach((element) => {
       element.classList.toggle("hidden-state", !isPrivilegedUser());
@@ -850,6 +1219,7 @@
   }
 
   async function loadGoal() {
+    if (!dom.goalMonth || !dom.goalYear || !dom.goalFeedback || !dom.goalValue || !dom.goalStat || !dom.goalMonthStat || !dom.goalNotice) return;
     const key = getMonthKey(dom.goalMonth.value, dom.goalYear.value);
     dom.goalFeedback.textContent = "Carregando meta...";
     try {
@@ -874,6 +1244,7 @@
   }
 
   async function saveGoal(event) {
+    if (!dom.goalValue || !dom.goalMonth || !dom.goalYear || !dom.saveGoalButton || !dom.goalFeedback || !dom.goalStat || !dom.goalMonthStat || !dom.goalNotice) return;
     event.preventDefault();
     if (!isDeveloperUser(state.currentUserData)) {
       dom.goalFeedback.textContent = "Apenas desenvolvedor pode salvar meta manual.";
@@ -910,18 +1281,18 @@
         resetAnnouncementForm();
         dom.announcementNotice.textContent = "Nenhum aviso global configurado no momento.";
         renderAnnouncementList([]);
-        dom.announcementFeedback.textContent = "Ainda nÃ£o existe aviso salvo.";
+        dom.announcementFeedback.textContent = "Ainda não existe aviso salvo.";
         return;
       }
 
       const latest = items[0];
       dom.announcementNotice.textContent = latest.isActive
-        ? `Ãšltimo aviso ativo para ${formatAnnouncementWindow(latest)} em ${getAnnouncementTargetLabel(latest.target)}.`
-        : "O Ãºltimo aviso salvo estÃ¡ desativado.";
+        ? `Último aviso ativo para ${formatAnnouncementWindow(latest)} em ${getAnnouncementTargetLabel(latest.target)}.`
+        : "O último aviso salvo está desativado.";
       renderAnnouncementList(items);
       dom.announcementFeedback.textContent = "Avisos carregados com sucesso.";
     } catch (error) {
-      dom.announcementFeedback.textContent = "NÃ£o foi possÃ­vel carregar o aviso.";
+      dom.announcementFeedback.textContent = "Não foi possível carregar o aviso.";
     }
   }
 
@@ -941,7 +1312,7 @@
     const isActive = dom.announcementActive.checked;
 
     if (!title || !message || !startDate || !daysVisible || !dailyLimit) {
-      dom.announcementFeedback.textContent = "Preencha tÃ­tulo, mensagem, data de inÃ­cio, dias e vezes por dia.";
+      dom.announcementFeedback.textContent = "Preencha título, mensagem, data de início, dias e vezes por dia.";
       return;
     }
 
@@ -964,11 +1335,11 @@
       resetAnnouncementForm();
       dom.announcementNotice.textContent = isActive
         ? `Aviso ativo para ${formatAnnouncementWindow({ startDate, daysVisible })} em ${getAnnouncementTargetLabel(target)}.`
-        : "Aviso salvo, porÃ©m desativado.";
+        : "Aviso salvo, porém desativado.";
       dom.announcementFeedback.textContent = "Aviso salvo com sucesso.";
       await loadAnnouncement();
     } catch (error) {
-      dom.announcementFeedback.textContent = "NÃ£o foi possÃ­vel salvar o aviso.";
+      dom.announcementFeedback.textContent = "Não foi possível salvar o aviso.";
     } finally {
       dom.saveAnnouncementButton.disabled = false;
     }
@@ -985,7 +1356,7 @@
       dom.announcementFeedback.textContent = nextActive ? "Aviso ativado." : "Aviso desativado.";
       await loadAnnouncement();
     } catch (error) {
-      dom.announcementFeedback.textContent = "NÃ£o foi possÃ­vel alterar o status do aviso.";
+      dom.announcementFeedback.textContent = "Não foi possível alterar o status do aviso.";
     }
   }
 
@@ -1005,11 +1376,12 @@
       dom.announcementActive.checked = Boolean(data.isActive);
       dom.announcementFeedback.textContent = "Campos preenchidos com base no aviso selecionado.";
     } catch (error) {
-      dom.announcementFeedback.textContent = "NÃ£o foi possÃ­vel carregar esse aviso para ediÃ§Ã£o.";
+      dom.announcementFeedback.textContent = "Não foi possível carregar esse aviso para edição.";
     }
   }
 
   async function changePassword(event) {
+    if (!dom.currentPassword || !dom.newPassword || !dom.confirmPassword || !dom.passwordFeedback || !dom.passwordSubmitButton) return;
     event.preventDefault();
     const currentPassword = String(dom.currentPassword.value || "").trim();
     const newPassword = String(dom.newPassword.value || "").trim();
@@ -1056,30 +1428,44 @@
 
   function renderProfile() {
     const user = state.currentUserData || {};
-    dom.welcomeText.textContent = `Bem-vindo, ${formatField(user.name, "Usuario")}. Aqui voce acompanha suas configuracoes da gestao.`;
-    dom.profileNameStat.textContent = formatField(user.name, "-");
-    dom.profileRoleStat.textContent = getRoleLabel(user);
-    dom.profileSectorStat.textContent = formatField(user.sector, "-");
-    dom.profileName.textContent = formatField(user.name, "-");
-    dom.profileCpf.textContent = formatField(user.cpf, "-");
-    dom.profileEmail.textContent = formatField(user.email, `${String(user.cpf || "").replace(/\D/g, "")}@jdemito.com`);
-    dom.profileRole.textContent = formatField(user.role || getRoleLabel(user), getRoleLabel(user));
-    dom.profileUnit.textContent = formatField(user.unit, "-");
-    dom.profileSector.textContent = formatField(user.sector, "-");
+    if (dom.welcomeText) dom.welcomeText.textContent = `Bem-vindo, ${formatField(user.name, "Usuario")}. Aqui voce acompanha suas configuracoes da gestao.`;
+    if (dom.profileNameStat) dom.profileNameStat.textContent = formatField(user.name, "-");
+    if (dom.profileRoleStat) dom.profileRoleStat.textContent = getRoleLabel(user);
+    if (dom.profileSectorStat) dom.profileSectorStat.textContent = formatField(user.sector, "-");
+    if (dom.profileName) dom.profileName.textContent = formatField(user.name, "-");
+    if (dom.profileCpf) dom.profileCpf.textContent = formatField(user.cpf, "-");
+    if (dom.profileEmail) dom.profileEmail.textContent = formatField(user.email, `${String(user.cpf || "").replace(/\D/g, "")}@jdemito.com`);
+    if (dom.profileRole) dom.profileRole.textContent = formatField(user.role || getRoleLabel(user), getRoleLabel(user));
+    if (dom.profileUnit) dom.profileUnit.textContent = formatField(user.unit, "-");
+    if (dom.profileSector) dom.profileSector.textContent = formatField(user.sector, "-");
 
     if (isDeveloperUser(user)) {
-      dom.goalForm.classList.remove("hidden-state");
-      dom.announcementSection.classList.remove("hidden-state");
-      dom.ridFormSection.classList.remove("hidden-state");
-      dom.goalNotice.textContent = "Defina a meta manual que sera usada nas telas administrativas.";
-      dom.goalFeedback.textContent = "";
+      if (dom.goalForm) dom.goalForm.classList.remove("hidden-state");
+      if (dom.announcementSection) dom.announcementSection.classList.remove("hidden-state");
+      if (dom.pushNotificationSection) dom.pushNotificationSection.classList.add("hidden-state");
+      if (dom.ridFormSection) dom.ridFormSection.classList.remove("hidden-state");
+      if (dom.goalNotice) dom.goalNotice.textContent = "Defina a meta manual que sera usada nas telas administrativas.";
+      if (dom.goalFeedback) dom.goalFeedback.textContent = "";
+      state.activeNotificationTab = "announcement";
+      renderNotificationTabLayout();
+    } else if (isPrivilegedUser(user)) {
+      if (dom.goalForm) dom.goalForm.classList.add("hidden-state");
+      if (dom.announcementSection) dom.announcementSection.classList.remove("hidden-state");
+      if (dom.pushNotificationSection) dom.pushNotificationSection.classList.add("hidden-state");
+      if (dom.ridFormSection) dom.ridFormSection.classList.add("hidden-state");
+      if (dom.goalNotice) dom.goalNotice.textContent = "A visualizacao de metas manuais e restrita ao perfil de desenvolvedor.";
+      if (dom.goalFeedback) dom.goalFeedback.textContent = "";
+      if (dom.goalStat) dom.goalStat.textContent = "-";
+      state.activeNotificationTab = "push";
+      renderNotificationTabLayout();
     } else {
-      dom.goalForm.classList.add("hidden-state");
-      dom.announcementSection.classList.add("hidden-state");
-      dom.ridFormSection.classList.add("hidden-state");
-      dom.goalNotice.textContent = "A visualizacao de metas manuais e restrita ao perfil de desenvolvedor.";
-      dom.goalFeedback.textContent = "";
-      dom.goalStat.textContent = "-";
+      if (dom.goalForm) dom.goalForm.classList.add("hidden-state");
+      if (dom.announcementSection) dom.announcementSection.classList.add("hidden-state");
+      if (dom.pushNotificationSection) dom.pushNotificationSection.classList.add("hidden-state");
+      if (dom.ridFormSection) dom.ridFormSection.classList.add("hidden-state");
+      if (dom.goalNotice) dom.goalNotice.textContent = "A visualizacao de metas manuais e restrita ao perfil de desenvolvedor.";
+      if (dom.goalFeedback) dom.goalFeedback.textContent = "";
+      if (dom.goalStat) dom.goalStat.textContent = "-";
     }
   }
 
@@ -1106,9 +1492,9 @@
       await auth.signOut();
     });
 
-    dom.loadGoalButton.addEventListener("click", loadGoal);
-    dom.goalForm.addEventListener("submit", saveGoal);
-    dom.passwordForm.addEventListener("submit", changePassword);
+    dom.loadGoalButton?.addEventListener("click", loadGoal);
+    dom.goalForm?.addEventListener("submit", saveGoal);
+    dom.passwordForm?.addEventListener("submit", changePassword);
     dom.loadAnnouncementButton.addEventListener("click", loadAnnouncement);
     dom.clearAnnouncementButton.addEventListener("click", () => {
       resetAnnouncementForm();
@@ -1141,6 +1527,53 @@
       if (duplicateButton) {
         duplicateAnnouncement(duplicateButton.dataset.duplicateAnnouncement);
       }
+    });
+    dom.pushNotificationForm.addEventListener("submit", savePushNotification);
+    dom.loadPushNotificationsButton.addEventListener("click", loadPushNotifications);
+    dom.selectAllPushRecipientsButton.addEventListener("click", () => {
+      state.pushAudienceUsers.forEach((user) => {
+        if (user?.id) state.selectedPushRecipientIds.add(String(user.id));
+      });
+      renderPushRecipients();
+      dom.pushNotificationFeedback.textContent = "Todos os usuarios carregados foram adicionados a selecao.";
+    });
+    dom.selectFilteredPushRecipientsButton.addEventListener("click", () => {
+      getFilteredPushAudienceUsers().forEach((user) => {
+        if (user?.id) state.selectedPushRecipientIds.add(String(user.id));
+      });
+      renderPushRecipients();
+      dom.pushNotificationFeedback.textContent = "Usuarios filtrados adicionados a selecao.";
+    });
+    dom.clearPushRecipientFiltersButton.addEventListener("click", () => {
+      dom.pushRecipientSearch.value = "";
+      dom.pushRecipientRoleFilter.value = "";
+      dom.pushRecipientUnitFilter.value = "";
+      dom.pushRecipientSectorFilter.value = "";
+      dom.pushRecipientEmploymentFilter.value = "";
+      renderPushRecipients();
+      dom.pushNotificationFeedback.textContent = "Filtros de destinatarios limpos.";
+    });
+    dom.clearPushRecipientsButton.addEventListener("click", () => {
+      state.selectedPushRecipientIds = new Set();
+      renderPushRecipients();
+      dom.pushNotificationFeedback.textContent = "Selecao de destinatarios limpa.";
+    });
+    [dom.pushRecipientSearch, dom.pushRecipientRoleFilter, dom.pushRecipientUnitFilter, dom.pushRecipientSectorFilter, dom.pushRecipientEmploymentFilter].forEach((field) => {
+      field.addEventListener(field === dom.pushRecipientSearch ? "input" : "change", () => {
+        renderPushRecipients();
+      });
+    });
+    dom.pushRecipientsList.addEventListener("change", (event) => {
+      const checkbox = event.target.closest("[data-push-recipient-id]");
+      if (!checkbox) return;
+      const id = String(checkbox.dataset.pushRecipientId || "");
+      if (!id) return;
+      if (checkbox.checked) {
+        state.selectedPushRecipientIds.add(id);
+      } else {
+        state.selectedPushRecipientIds.delete(id);
+      }
+      renderPushRecipients();
     });
 
     dom.loadRidFormButton.addEventListener("click", loadRidFormSchema);
@@ -1300,6 +1733,10 @@
       window.lucide.createIcons();
     }
     await loadGoal();
+    if (isPrivilegedUser(state.currentUserData)) {
+      await loadPushAudienceUsers();
+      await loadPushNotifications();
+    }
     if (isDeveloperUser(state.currentUserData)) {
       await loadAnnouncement();
       await loadRidFormSchema();
@@ -1308,8 +1745,9 @@
 
   function init() {
     const now = new Date();
-    dom.goalMonth.value = String(now.getMonth() + 1);
-    dom.goalYear.value = String(now.getFullYear());
+    if (dom.goalMonth) dom.goalMonth.value = String(now.getMonth() + 1);
+    if (dom.goalYear) dom.goalYear.value = String(now.getFullYear());
+    setupNotificationSectionTabs();
     bindListeners();
     if (window.lucide && typeof window.lucide.createIcons === "function") {
       window.lucide.createIcons();
@@ -1330,5 +1768,3 @@
 
   init();
 })();
-
-
