@@ -12,10 +12,6 @@
     firebase.initializeApp(firebaseConfig);
   }
 
-  if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-  }
-
   const auth = firebase.auth();
   auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
   const db = firebase.firestore();
